@@ -1,0 +1,2 @@
+strategy: "sma_crossover"
+window: "20"
