@@ -33,10 +33,10 @@ def backtest_all_tickers(features_folder, results_folder):
     os.makedirs(results_folder, exist_ok=True)
 
     for file_name in os.listdir(features_folder):
-        if not file_name.endswith("_features.csv"):
+        if not file_name.endswith("_features_filtered.csv"):
             continue
 
-        ticker = file_name.replace("_features.csv", "")
+        ticker = file_name.replace("_features_filtered.csv", "")
         file_path = os.path.join(features_folder, file_name)
         df = pd.read_csv(file_path, index_col=0, parse_dates=True)
 

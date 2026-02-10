@@ -27,10 +27,10 @@ def plot_all_tickers(
     figures_dir = reports_dir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
 
-    feature_files = list(features_dir.glob("*_features.csv"))
+    feature_files = list(features_dir.glob("*_features_filtered.csv"))
 
     if not feature_files:
-        raise FileNotFoundError("No *_features.csv files found")
+        raise FileNotFoundError("No *_features_filtered.csv files found")
 
     for file_path in tqdm(feature_files, desc="Plotting tickers"):
         symbol = file_path.stem.replace("_features", "")

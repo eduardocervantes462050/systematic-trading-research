@@ -1,0 +1,8 @@
+# Analysis date range
+start_date: "2025-11-01"
+end_date: "2025-12-31"
+
+# Optional tickers to analyze (override main TICKERS)
+tickers:
+  - AAPL
+  - BAC

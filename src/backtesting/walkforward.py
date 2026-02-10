@@ -3,8 +3,8 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from backtest import backtest_strategy
-from signals import generate_signals  # your existing signal function
+from backtesting.backtest import backtest_strategy
+from backtesting.signals import generate_signals  # your existing signal function
 
 
 def run_walkforward_all_tickers(
@@ -31,7 +31,7 @@ def run_walkforward_all_tickers(
         if not file.endswith(".csv"):
             continue
 
-        ticker = file.replace("_features.csv", "")
+        ticker = file.replace("_features_filtered.csv", "")
         print(f"\n=== Processing {ticker} ===")
         path = os.path.join(features_folder, file)
         df = pd.read_csv(path, index_col=0, parse_dates=True)

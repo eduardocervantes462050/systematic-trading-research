@@ -15,12 +15,14 @@ Date: 2026-02-09
 
 import os
 import pandas as pd
+import yaml
 
 from data.fetch_data import DataFetcher
 from data.features import FeatureEngineer
 from utils.visualizations import plot_all_tickers
 from backtesting.backtest import backtest_all_tickers
 from backtesting.walkforward import run_walkforward_all_tickers
+from utils.reporting import generate_overall_equity_curve
 
 
 # -------------------------------
@@ -125,6 +127,41 @@ def main():
     except Exception as e:
         print(f"Error fetching FRED data: {e}")
 
+    import yaml
+
+    # Load config
+    with open("config/analysis_config.yaml") as f:
+        analysis_cfg = yaml.safe_load(f)
+
+    ANALYSIS_START = pd.to_datetime(analysis_cfg.get("start_date", "2000-01-01"))
+    ANALYSIS_END = pd.to_datetime(analysis_cfg.get("end_date", "2025-12-31"))
+
+    # Optional tickers override
+    ANALYSIS_TICKERS = analysis_cfg.get(
+        "tickers", None
+    )  # None means use all downloaded tickers
+
+    # Filter feature data by date range
+    filtered_data = {}
+    features_files = [
+        f for f in os.listdir(INTERIM_DATA_FOLDER) if f.endswith("_features.csv")
+    ]
+
+    for file in features_files:
+        ticker = os.path.basename(file).split("_")[0]
+        if ANALYSIS_TICKERS and ticker not in ANALYSIS_TICKERS:
+            continue
+        df = pd.read_csv(
+            os.path.join(INTERIM_DATA_FOLDER, file), index_col=0, parse_dates=True
+        )
+        df_filtered = df.loc[(df.index >= ANALYSIS_START) & (df.index <= ANALYSIS_END)]
+        filtered_data[ticker] = df_filtered
+        # Optional: save filtered version
+        for ticker, df_filtered in filtered_data.items():
+            df_filtered.to_csv(
+                os.path.join(INTERIM_DATA_FOLDER, f"{ticker}_features_filtered.csv")
+            )
+
     # -------------------------------
     # Step 4: Plot features
     # -------------------------------
@@ -160,6 +197,24 @@ def main():
         print("Walk-forward testing completed successfully.")
     except Exception as e:
         print(f"Error during walk-forward testing: {e}")
+
+    # -------------------------------
+    # Step 7: Overall equity curve
+    # -------------------------------
+
+    backtests_folder = "reports/backtests"
+    figures_dir = "reports/figures"
+    os.makedirs(figures_dir, exist_ok=True)
+
+    # Get tickers dynamically from feature files
+    features_folder = "data/interim"
+    tickers_files = [
+        f for f in os.listdir(features_folder) if f.endswith("_features_filtered.csv")
+    ]
+    tickers = [os.path.basename(f).split("_")[0] for f in tickers_files]
+
+    # Generate overall equity curve and drawdown
+    generate_overall_equity_curve(tickers, backtests_folder, figures_dir)
 
     print("\n=== Pipeline Finished ===")
 
