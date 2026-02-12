@@ -1,13 +1,13 @@
 # Quant Project Report
 
 **Author:** Eduardo Cervantes Alarcón  
-**Date:** 2026-02-09
+**Date:** 2026-02-10
 
 ---
 
 ## 1. Executive Summary
 - Strategy: Momentum + Macro-aware
-- Instruments: AAPL, BAC
+- Instruments: AAPL, BAC, BTC-USD, CL=F, C, ETH-USD, EURUSD=X, GBPUSD=X, GC=F, HISFX, INTC, JPY=X, MSFT, PRLAX, QASGX, SI=F, WFC, XRP-USD, ^IRX, ^TNX, ^TYX
 - Time period: 2000-01-01 – 2025-12-31
 - Key metrics:
   - CAGR: 12.5%
@@ -52,15 +52,109 @@
 
 ## AAPL
 
-![AAPL_filtered.png](figures/AAPL_filtered.png)
+![AAPL.png](figures/AAPL.png)
 
-![AAPL_filtered_returns_hist.png](figures/AAPL_filtered_returns_hist.png)
+![AAPL_returns_hist.png](figures/AAPL_returns_hist.png)
+
+![AAPL_rolling_stats.png](figures/AAPL_rolling_stats.png)
+
+![AAPL_signals.png](figures/AAPL_signals.png)
 
 ## BAC
 
-![BAC_filtered.png](figures/BAC_filtered.png)
+![BAC.png](figures/BAC.png)
 
-![BAC_filtered_returns_hist.png](figures/BAC_filtered_returns_hist.png)
+![BAC_returns_hist.png](figures/BAC_returns_hist.png)
+
+![BAC_rolling_stats.png](figures/BAC_rolling_stats.png)
+
+![BAC_signals.png](figures/BAC_signals.png)
+
+## BTC-USD
+
+## CL=F
+
+## C
+
+![C.png](figures/C.png)
+
+![C_filtered.png](figures/C_filtered.png)
+
+![C_filtered_returns_hist.png](figures/C_filtered_returns_hist.png)
+
+![C_returns_hist.png](figures/C_returns_hist.png)
+
+![C_rolling_stats.png](figures/C_rolling_stats.png)
+
+![C_signals.png](figures/C_signals.png)
+
+## ETH-USD
+
+## EURUSD=X
+
+## GBPUSD=X
+
+## GC=F
+
+## HISFX
+
+## INTC
+
+![INTC.png](figures/INTC.png)
+
+![INTC_filtered.png](figures/INTC_filtered.png)
+
+![INTC_filtered_returns_hist.png](figures/INTC_filtered_returns_hist.png)
+
+![INTC_returns_hist.png](figures/INTC_returns_hist.png)
+
+![INTC_rolling_stats.png](figures/INTC_rolling_stats.png)
+
+![INTC_signals.png](figures/INTC_signals.png)
+
+## JPY=X
+
+## MSFT
+
+![MSFT.png](figures/MSFT.png)
+
+![MSFT_filtered.png](figures/MSFT_filtered.png)
+
+![MSFT_filtered_returns_hist.png](figures/MSFT_filtered_returns_hist.png)
+
+![MSFT_returns_hist.png](figures/MSFT_returns_hist.png)
+
+![MSFT_rolling_stats.png](figures/MSFT_rolling_stats.png)
+
+![MSFT_signals.png](figures/MSFT_signals.png)
+
+## PRLAX
+
+## QASGX
+
+## SI=F
+
+## WFC
+
+![WFC.png](figures/WFC.png)
+
+![WFC_filtered.png](figures/WFC_filtered.png)
+
+![WFC_filtered_returns_hist.png](figures/WFC_filtered_returns_hist.png)
+
+![WFC_returns_hist.png](figures/WFC_returns_hist.png)
+
+![WFC_rolling_stats.png](figures/WFC_rolling_stats.png)
+
+![WFC_signals.png](figures/WFC_signals.png)
+
+## XRP-USD
+
+## ^IRX
+
+## ^TNX
+
+## ^TYX
 
 
 

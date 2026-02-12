@@ -33,7 +33,7 @@ def plot_all_tickers(
         raise FileNotFoundError("No *_features_filtered.csv files found")
 
     for file_path in tqdm(feature_files, desc="Plotting tickers"):
-        symbol = file_path.stem.replace("_features", "")
+        symbol = file_path.stem.replace("_features_filtered", "")
 
         df = pd.read_csv(file_path)
 
@@ -44,7 +44,7 @@ def plot_all_tickers(
         # --- 1️⃣ Time index ---
         df["Date"] = pd.to_datetime(df["Date"])
         df.set_index("Date", inplace=True)
-        roll_window = 60
+        roll_window = 20
 
         rolling_mean = df["return"].rolling(roll_window).mean()
         rolling_std = df["return"].rolling(roll_window).std()
@@ -109,7 +109,9 @@ def plot_all_tickers(
             plt.close()
 
             tqdm.write(f"Saved {hist_path}")
-
+        print(f"{symbol}: columns = {df.columns.tolist()}")
+        print(f"{symbol}: rows = {len(df)}")
+        print(f"{symbol}: rolling_mean.notna().sum() = {rolling_mean.notna().sum()}")
         if rolling_mean.notna().sum() > 0:
             fig, axes = plt.subplots(2, 1, figsize=(18, 8), sharex=True)
 

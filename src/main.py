@@ -31,7 +31,25 @@ from utils.reporting import generate_overall_equity_curve
 TICKERS = [
     "AAPL",
     "BAC",
-    # Add more tickers here
+    "MSFT",
+    "INTC",
+    "WFC",
+    "C",
+    "GC=F",
+    "SI=F",
+    "CL=F",
+    "BTC-USD",
+    "ETH-USD",
+    "XRP-USD",
+    "EURUSD=X",
+    "JPY=X",
+    "GBPUSD=X",
+    "PRLAX",
+    "QASGX",
+    "HISFX",
+    "^TNX",
+    "^IRX",
+    "^TYX",
 ]
 
 RAW_DATA_FOLDER = r"C:\Users\eduar\Projects\Python\quant-project\data\raw"
@@ -45,7 +63,14 @@ FRED_API_KEY = (
 FRED_SERIES_ID = "CPIAUCSL"
 FRED_URL = "https://api.stlouisfed.org/fred/series/observations"
 
-ENABLED_PLOT_GROUPS = ["price", "volume"]  # Groups to visualize
+ENABLED_PLOT_GROUPS = [
+    "price",
+    "volume",
+    "returns",
+    "volatility",
+    "momentum",
+    "trend",
+]  # Groups to visualize
 
 
 # -------------------------------
