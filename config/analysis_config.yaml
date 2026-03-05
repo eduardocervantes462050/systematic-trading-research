@@ -1,6 +1,6 @@
 # Analysis date range
 start_date: "2025-01-01"
-end_date: "2025-12-31"
+end_date: "2025-04-03"
 
 # Optional tickers to analyze (override main TICKERS)
 tickers:
@@ -10,4 +10,14 @@ tickers:
   - INTC
   - WFC
   - BAC
-  - C 
+  - C
+  - ABT
+  - DIS
+  - GOOGL
+  - WMT
+
+efficient_frontier:
+  enabled: true
+  tickers: ["AAPL", "MSFT", "INTC"]  # leave empty or None to use all
+  save_path: "reports/figures/efficient_frontier.png"
+  num_points: 50
