@@ -49,7 +49,10 @@ def compute_and_save_efficient_frontier(filtered_data, ef_cfg):
     plt.title("Efficient Frontier")
     plt.legend()
     plt.grid(True)
-    ef_path = ef_cfg.get("save_path", "reports/figures/efficient_frontier.png")
+    ef_path = ef_cfg.get(
+        "save_path",
+        r"C:\Users\eduar\Projects\Python\quant_project\reports\figures\efficient_frontier.png",
+    )
     plt.savefig(ef_path)
     plt.close()
     print(f"Efficient Frontier saved to {ef_path}")

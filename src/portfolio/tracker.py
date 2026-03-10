@@ -82,7 +82,7 @@ class Portfolio:
             current_capital = self.positions.get(ticker, {}).get("capital", 0)
             delta_capital = target_capital - current_capital
             share_price = market_prices[ticker]
-            delta_shares = int(delta_capital / share_price)
+            delta_shares = delta_capital / share_price
             trades[ticker] = delta_shares
         return trades
 
@@ -118,7 +118,9 @@ class MultiClientPortfolioTracker:
         else:
             raise ValueError(f"No client named {name}")
 
-    def save_all_histories(self, folder="reports/portfolios"):
+    def save_all_histories(
+        self, folder="C:\\Users\\eduar\\Projects\\Python\\quant_project\\reports"
+    ):
         import os
 
         os.makedirs(folder, exist_ok=True)
