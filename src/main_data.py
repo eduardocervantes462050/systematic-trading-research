@@ -1,222 +1,274 @@
-"""
-data_pipeline.py
-----------------
-Steps 1-3 of the quant-project pipeline + DB persistence.
-"""
-
-import os
+from __future__ import annotations
 import json
+import os
 import pandas as pd
-
-from data.fetch_data import DataFetcher
+from data.database import build_db, bulk_insert_prices, get_session, upsert_asset
 from data.features import FeatureEngineer
+from data.fetch_data import DataFetcher
 from utils.helpers import ensure_folder
-from data.database import build_db, get_session, upsert_asset, bulk_insert_prices
-
-# ---------------------------------------------------------------------------
-# Global config
-# ---------------------------------------------------------------------------
 
 _CONFIG_PATH = (
     r"C:\Users\eduar\Projects\Python\quant_project\config\project_config.json"
 )
 
-with open(_CONFIG_PATH, "r") as f:
-    _config = json.load(f)
 
-RAW_DATA_FOLDER = _config["folders"]["raw_data"]
-INTERIM_DATA_FOLDER = _config["folders"]["interim_data"]
-REPORTS_FOLDER = _config["folders"]["reports"]
-BACKTESTS_FOLDER = _config["folders"]["backtests"]
-TICKERS = _config["tickers"]
-FRED_API_KEY = _config["fred"]["api_key"]
-FRED_SERIES_ID = _config["fred"]["series_id"]
-FRED_URL = _config["fred"]["url"]
-ENABLED_PLOT_GROUPS = _config["enabled_plot_groups"]
+def _load_config(path: str) -> dict:
+    with open(path, "r") as fh:
+        return json.load(fh)
 
-# Asset type mapping — extend if needed
-ASSET_TYPES = {
+
+_config = _load_config(_CONFIG_PATH)
+
+RAW_DATA_FOLDER: str = _config["folders"]["raw_data"]
+INTERIM_DATA_FOLDER: str = _config["folders"]["interim_data"]
+REPORTS_FOLDER: str = _config["folders"]["reports"]
+BACKTESTS_FOLDER: str = _config["folders"]["backtests"]
+TICKERS: list[str] = _config["tickers"]
+FRED_API_KEY: str = _config["fred"]["api_key"]
+FRED_SERIES_ID: str = _config["fred"]["series_id"]
+FRED_URL: str = _config["fred"]["url"]
+ENABLED_PLOT_GROUPS: list[str] = _config["enabled_plot_groups"]
+
+ASSET_TYPES: dict[str, str] = {
+    # Crypto
     "BTC-USD": "crypto",
     "ETH-USD": "crypto",
     "XRP-USD": "crypto",
-    "GC=F": "ETF",
-    "SI=F": "ETF",
-    "CL=F": "ETF",
+    # Commodities (futures)
+    "GC=F": "ETF",  # Gold
+    "SI=F": "ETF",  # Silver
+    "CL=F": "ETF",  # Crude oil
+    # Forex / FX rates
     "EURUSD=X": "bond",
     "GBPUSD=X": "bond",
     "JPY=X": "bond",
-    "^TNX": "bond",
-    "^TYX": "bond",
-    "^IRX": "bond",
+    # Treasury yields
+    "^TNX": "bond",  # 10-year
+    "^TYX": "bond",  # 30-year
+    "^IRX": "bond",  # 13-week
 }
 
 
 def get_asset_type(ticker: str) -> str:
-    """Return asset type for a ticker, default to stock."""
+    """Return the asset-class label for *ticker*.
+
+    Falls back to ``"stock"`` for any symbol not listed in :data:`ASSET_TYPES`.
+    """
     return ASSET_TYPES.get(ticker, "stock")
 
 
 # ---------------------------------------------------------------------------
-# Main pipeline
+# Pipeline steps
 # ---------------------------------------------------------------------------
 
 
-def main() -> None:
-    print("=== Quant Project Pipeline Started ===\n")
+def _step1_fetch_prices(
+    fetcher: DataFetcher,
+    session_factory,
+) -> list[str]:
+    """Step 1 — Download raw OHLCV data and persist close prices to the DB.
 
-    # Connect to DB once — reuse across all steps
-    engine, SessionFactory = build_db()
+    For each ticker in :data:`TICKERS`:
+    * **Skip** if a raw CSV already exists in :data:`RAW_DATA_FOLDER`.
+    * Otherwise download via ``DataFetcher.get_price_data``, save to CSV, and
+      insert the ``Close`` column into the database.
 
-    # ------------------------------------------------------------------
-    # Step 1 — Download missing price data + save to DB
-    # ------------------------------------------------------------------
-    # ------------------------------------------------------------------
+    Parameters
+    ----------
+    fetcher:
+        Configured :class:`DataFetcher` instance.
+    session_factory:
+        SQLAlchemy session factory returned by :func:`build_db`.
 
-    # Step 1 — Download missing price data + save to DB
-    # ------------------------------------------------------------------
+    Returns
+    -------
+    list[str]
+        Tickers for which the download failed (empty DataFrame returned).
+    """
     print("Step 1: Fetching price data...")
-
-    fetcher = DataFetcher()
     ensure_folder(RAW_DATA_FOLDER)
 
     tickers_to_fetch = []
     for ticker in TICKERS:
         path = os.path.join(RAW_DATA_FOLDER, f"{ticker}.csv")
         if os.path.exists(path):
-            print(f"Skipping {ticker}, already downloaded.")
+            print(f"  Skipping {ticker} — already downloaded.")
         else:
             tickers_to_fetch.append(ticker)
 
-    failed_tickers = []
+    failed_tickers: list[str] = []
 
-    if tickers_to_fetch:
-        raw_data = fetcher.get_price_data(
-            tickers_to_fetch,
-            start="2000-01-01",
-            end="2025-12-31",
-            batch_size=5,
-            retries=3,
-            delay=5,
-        )
+    if not tickers_to_fetch:
+        print("  All tickers already downloaded.")
+        return failed_tickers
 
-        for ticker, df in raw_data.items():
-            if df.empty:
-                print(f"Warning: {ticker} returned empty data.")
-                failed_tickers.append(ticker)
-            else:
-                df.to_csv(os.path.join(RAW_DATA_FOLDER, f"{ticker}.csv"))
-                print(f"Saved {ticker}.csv with {len(df)} rows")
+    raw_data: dict[str, pd.DataFrame] = fetcher.get_price_data(
+        tickers_to_fetch,
+        start="2000-01-01",
+        end="2025-12-31",
+        batch_size=5,
+        retries=3,
+        delay=5,
+    )
+    # raw_data shape:
+    #   {
+    #       "AAPL": DataFrame,   # OHLCV columns, DatetimeIndex
+    #       "MSFT": DataFrame,
+    #       ...
+    #   }
 
-                with get_session(SessionFactory) as session:
-                    asset = upsert_asset(
-                        session,
-                        symbol=ticker,
-                        name=ticker,
-                        asset_type=get_asset_type(ticker),
-                    )
-                    df_prices = df[["Close"]].reset_index()
-                    df_prices.columns = ["price_date", "price"]
-                    df_prices = df_prices.dropna()
-                    count = bulk_insert_prices(session, asset.asset_id, df_prices)
-                    print(f"  → Inserted {count} price rows into DB for {ticker}")
-    else:
-        print("All tickers already downloaded.")
-
-    # ── Load ALL existing CSVs into DB regardless ──────────────────────
-    print("\nLoading all existing CSVs into DB...")
-    for ticker in TICKERS:
-        csv_path = os.path.join(RAW_DATA_FOLDER, f"{ticker}.csv")
-        if not os.path.exists(csv_path):
-            print(f"  ⚠️  No CSV found for {ticker}, skipping.")
-            continue
-
-        # peek at the first row to detect format
-        with open(csv_path, "r") as f:
-            first_line = f.readline().strip()
-
-        # FORMAT A — yfinance multi-header: "Price,Close,High,Low,Open,Volume"
-        if first_line.startswith("Price"):
-            df = pd.read_csv(csv_path, header=0, skiprows=[1, 2])
-            df = df.rename(columns={"Price": "price_date", "Close": "price"})
-
-        # FORMAT B — clean header: "Date,Close,High,Low,Open,Volume"
-        elif first_line.startswith("Date"):
-            df = pd.read_csv(csv_path, index_col=0)
-            df = df.reset_index()
-            df = df.rename(columns={df.columns[0]: "price_date", "Close": "price"})
-
-        else:
-            print(
-                f"  ⚠️  {ticker} — unrecognized format, skipping. First line: {first_line}"
-            )
-            continue
-
-        # common cleaning for both formats
-        df = df[["price_date", "price"]].dropna()
-        df = df[pd.to_datetime(df["price_date"], errors="coerce").notna()]
-        df["price_date"] = pd.to_datetime(df["price_date"], errors="coerce").dt.date
-        df["price"] = pd.to_numeric(df["price"], errors="coerce")
-        df = df.dropna()
-
+    for ticker, df in raw_data.items():
         if df.empty:
-            print(f"  ⚠️  {ticker} — no valid rows after cleaning, skipping.")
+            print(f"  ⚠️  {ticker} — returned empty data, skipping.")
+            failed_tickers.append(ticker)
             continue
 
-        with get_session(SessionFactory) as session:
+        # Persist raw CSV
+        csv_path = os.path.join(RAW_DATA_FOLDER, f"{ticker}.csv")
+        df.to_csv(csv_path)
+        print(f"  Saved {ticker}.csv ({len(df)} rows)")
+
+        # Insert close prices into the DB
+        with get_session(session_factory) as session:
             asset = upsert_asset(
-                session, symbol=ticker, name=ticker, asset_type=get_asset_type(ticker)
+                session,
+                symbol=ticker,
+                name=ticker,
+                asset_type=get_asset_type(ticker),
             )
-            count = bulk_insert_prices(session, asset.asset_id, df)
-            print(f"  ✅ {ticker} — {count} new rows inserted into DB")
+            df_prices = (
+                df[["Close"]]
+                .reset_index()
+                .rename(columns={"index": "price_date", "Close": "price"})
+                .dropna()
+            )
+            count = bulk_insert_prices(session, asset.asset_id, df_prices)
+            print(f"    → {count} price rows inserted into DB for {ticker}")
 
-    if failed_tickers:
-        print(f"⚠️  Failed to download: {failed_tickers}")
+    return failed_tickers
 
-    # ------------------------------------------------------------------
-    # Step 2 — Feature engineering (no DB changes needed here)
-    # ------------------------------------------------------------------
+
+def _step2_engineer_features(
+    session_factory,
+) -> None:
     print("\nStep 2: Performing feature engineering...")
+    ensure_folder(INTERIM_DATA_FOLDER)
 
     fe = FeatureEngineer()
-    ensure_folder(INTERIM_DATA_FOLDER)
-    data_with_features = fe.process_csv_folder(RAW_DATA_FOLDER)
+    data_with_features: dict[str, pd.DataFrame] = fe.process_csv_folder(RAW_DATA_FOLDER)
 
+    # --- Save enriched CSVs to disk ----------------------------------------
     for ticker, df_features in data_with_features.items():
-        path = os.path.join(INTERIM_DATA_FOLDER, f"{ticker}_features.csv")
-        df_features.to_csv(path)
-        print(f"Saved features for {ticker} ({len(df_features)} rows)")
+        out_path = os.path.join(INTERIM_DATA_FOLDER, f"{ticker}_features.csv")
+        df_features.to_csv(out_path)
+        print(f"  Saved {ticker}_features.csv ({len(df_features)} rows)")
 
-    # ------------------------------------------------------------------
-    # Step 3 — Fetch FRED macroeconomic data + save to DB
-    # ------------------------------------------------------------------
+    # --- Load ALL interim CSVs into the DB -----------------------------------
+    # This covers tickers that were already on disk before this run so the DB
+    # stays in sync even on partial / incremental runs.
+    print("\n  Loading all interim CSVs into DB...")
+    for ticker in TICKERS:
+        csv_path = os.path.join(INTERIM_DATA_FOLDER, f"{ticker}_features.csv")
+
+        if not os.path.exists(csv_path):
+            print(f"    ⚠️  No features CSV found for {ticker}, skipping.")
+            continue
+
+        df = pd.read_csv(csv_path)
+
+        if df is None:
+            print(f"    ⚠️  {ticker} — unrecognised CSV format, skipping.")
+            continue
+
+        if df.empty:
+            print(f"    ⚠️  {ticker} — no valid rows after cleaning, skipping.")
+            continue
+
+        with get_session(session_factory) as session:
+            asset = upsert_asset(
+                session,
+                symbol=ticker,
+                name=ticker,
+                asset_type=get_asset_type(ticker),
+            )
+            count = bulk_insert_prices(session, asset.asset_id, df)
+            print(f"    ✅ {ticker} — {count} new rows inserted into DB")
+
+
+def _step3_fetch_fred(
+    fetcher: DataFetcher,
+    session_factory,
+) -> None:
+    """Step 3 — Fetch a FRED macro time-series and persist it.
+
+    Downloads the series identified by :data:`FRED_SERIES_ID`, saves it as a
+    raw CSV, and inserts it into the database as a synthetic asset so it can
+    be joined with equity/crypto price data in downstream analyses.
+
+    Parameters
+    ----------
+    fetcher:
+        Configured :class:`DataFetcher` instance.
+    session_factory:
+        SQLAlchemy session factory returned by :func:`build_db`.
+    """
     print("\nStep 3: Fetching FRED macroeconomic data...")
 
     try:
-        fred_data = fetcher.get_fred_data(FRED_API_KEY, FRED_SERIES_ID, FRED_URL)
+        fred_data: pd.DataFrame = fetcher.get_fred_data(
+            FRED_API_KEY, FRED_SERIES_ID, FRED_URL
+        )
 
-        # ── Save CSV (original behaviour) ──────────────────────────
-        fred_data_path = os.path.join(RAW_DATA_FOLDER, f"{FRED_SERIES_ID}.csv")
-        fred_data.to_csv(fred_data_path)
-        print(f"Saved FRED data to {fred_data_path} ({len(fred_data)} rows)")
+        # Save CSV
+        fred_csv_path = os.path.join(RAW_DATA_FOLDER, f"{FRED_SERIES_ID}.csv")
+        fred_data.to_csv(fred_csv_path)
+        print(f"  Saved FRED data → {fred_csv_path} ({len(fred_data)} rows)")
 
-        # ── Save to DB ──────────────────────────────────────────────
-        with get_session(SessionFactory) as session:
+        # Insert into DB
+        with get_session(session_factory) as session:
             asset = upsert_asset(
                 session,
                 symbol=FRED_SERIES_ID,
                 name=f"FRED: {FRED_SERIES_ID}",
                 asset_type="bond",
             )
-            df_fred = fred_data.reset_index()
-            df_fred.columns = ["price_date", "price"]
-            df_fred = df_fred.dropna()
+            df_fred = (
+                fred_data.reset_index()
+                .rename(
+                    columns={
+                        fred_data.index.name or "index": "price_date",
+                        fred_data.columns[0]: "price",
+                    }
+                )
+                .dropna()
+            )
             count = bulk_insert_prices(session, asset.asset_id, df_fred)
-            print(f"  → Inserted {count} FRED rows into DB")
+            print(f"    → {count} FRED rows inserted into DB")
 
-    except Exception as e:
-        print(f"Error fetching FRED data: {e}")
+    except Exception as exc:
+        print(f"  ❌ Error fetching FRED data: {exc}")
 
-    print("\n🎉 Pipeline complete!")
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
+    """Run all three pipeline steps in sequence."""
+    print("=== Quant Project Pipeline Started ===\n")
+
+    engine, session_factory = build_db()
+    fetcher = DataFetcher()
+
+    failed_tickers = _step1_fetch_prices(fetcher, session_factory)
+    _step2_engineer_features(session_factory)
+    # _step3_fetch_fred(fetcher, session_factory)
+
+    if failed_tickers:
+        print(f"\n⚠️  Tickers that failed to download: {failed_tickers}")
+
+    # print("\n🎉 Pipeline complete!")
 
 
 if __name__ == "__main__":

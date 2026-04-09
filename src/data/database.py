@@ -270,14 +270,41 @@ class AssetPrice(Base):
         primary_key=True,
         server_default=text("gen_random_uuid()"),
     )
+
     asset_id = Column(
         PG_UUID(as_uuid=True),
         ForeignKey("assets.asset_id", ondelete="CASCADE"),
         nullable=False,
     )
-    price = Column(Numeric(18, 2), nullable=False)
-    price_date = Column(Date, nullable=False)
 
+    # OHLCV
+    price_date = Column(Date, nullable=False)
+    open = Column(Numeric(18, 4))
+    high = Column(Numeric(18, 4))
+    low = Column(Numeric(18, 4))
+    close = Column(Numeric(18, 4))
+    volume = Column(Numeric(20, 2))
+
+    # Returns
+    return_ = Column("return", Numeric(18, 6))
+    log_return = Column(Numeric(18, 6))
+    cum_return = Column(Numeric(18, 6))
+
+    # Volatility
+    vol_20 = Column(Numeric(18, 6))
+    vol_60 = Column(Numeric(18, 6))
+
+    # Technical indicators
+    rsi_14 = Column(Numeric(10, 4))
+    macd = Column(Numeric(18, 6))
+    macd_signal = Column(Numeric(18, 6))
+    macd_hist = Column(Numeric(18, 6))
+
+    # Risk metrics
+    rolling_max = Column(Numeric(18, 4))
+    drawdown = Column(Numeric(18, 6))
+
+    # relationships
     asset = relationship("Asset", back_populates="prices")
 
     __table_args__ = (
@@ -286,7 +313,7 @@ class AssetPrice(Base):
     )
 
     def __repr__(self):
-        return f"<AssetPrice(price={self.price}, date={self.price_date})>"
+        return f"<AssetPrice(close={self.close}, date={self.price_date})>"
 
 
 # =============================================================================
@@ -473,43 +500,72 @@ def get_transactions(session: Session, portfolio_id: UUID) -> pd.DataFrame:
 
 def bulk_insert_prices(session: Session, asset_id: UUID, price_df: pd.DataFrame) -> int:
     """
-    Insert historical prices from a DataFrame into asset_prices.
-    DataFrame must have columns: ['price_date', 'price']
-    Skips rows that already exist (ON CONFLICT DO NOTHING via merge logic).
-
-    Returns the number of rows inserted.
+    Insert full OHLCV + indicators into asset_prices.
+    Skips existing (asset_id, price_date).
+    Returns number of inserted rows.
     """
+
+    # Normalize dates once (faster + cleaner)
+    price_df = price_df.copy()
+    price_df["price_date"] = pd.to_datetime(price_df["Date"]).dt.date
+
+    # Load existing dates
     existing = {
-        r.price_date
-        for r in session.query(AssetPrice.price_date).filter_by(asset_id=asset_id)
+        r[0]
+        for r in session.query(AssetPrice.price_date).filter(
+            AssetPrice.asset_id == asset_id
+        )
     }
 
-    new_records = [
-        AssetPrice(
-            asset_id=asset_id,
-            price=Decimal(str(row["price"])),
-            price_date=(
-                row["price_date"]
-                if isinstance(row["price_date"], date)
-                else pd.to_datetime(row["price_date"]).date()
-            ),
+    new_records = []
+
+    for _, row in price_df.iterrows():
+        if row["price_date"] in existing:
+            continue
+
+        new_records.append(
+            AssetPrice(
+                asset_id=asset_id,
+                # OHLCV
+                open=Decimal(str(row["Open"])) if pd.notna(row.get("Open")) else None,
+                high=Decimal(str(row["High"])) if pd.notna(row.get("High")) else None,
+                low=Decimal(str(row["Low"])) if pd.notna(row.get("Low")) else None,
+                close=(
+                    Decimal(str(row["Close"])) if pd.notna(row.get("Close")) else None
+                ),
+                volume=(
+                    Decimal(str(row["Volume"])) if pd.notna(row.get("Volume")) else None
+                ),
+                # Returns
+                return_=row.get("return"),
+                log_return=row.get("log_return"),
+                cum_return=row.get("cum_return"),
+                # Volatility
+                vol_20=row.get("vol_20"),
+                vol_60=row.get("vol_60"),
+                # Indicators
+                rsi_14=row.get("rsi_14"),
+                macd=row.get("macd"),
+                macd_signal=row.get("macd_signal"),
+                macd_hist=row.get("macd_hist"),
+                # Risk metrics
+                rolling_max=row.get("rolling_max"),
+                drawdown=row.get("drawdown"),
+                # Date
+                price_date=row["price_date"],
+            )
         )
-        for _, row in price_df.iterrows()
-        if (
-            pd.to_datetime(row["price_date"]).date()
-            if not isinstance(row["price_date"], date)
-            else row["price_date"]
-        )
-        not in existing
-    ]
 
     if new_records:
         session.bulk_save_objects(new_records)
         session.flush()
 
     logger.info(
-        "Inserted %d new price records for asset %s", len(new_records), asset_id
+        "Inserted %d new price records for asset %s",
+        len(new_records),
+        asset_id,
     )
+
     return len(new_records)
 
 
