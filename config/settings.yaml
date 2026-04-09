@@ -1,2 +1,12 @@
 key: "value"
 date: "2020-01-01"
+
+database:
+  host: "localhost"
+  port: 5432
+  name: "portfolio_db"
+  user: "postgres"
+  password: "Edu462050cer."
+  pool_size: 5
+  max_overflow: 10
+  echo: false
