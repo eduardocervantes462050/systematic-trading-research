@@ -1,0 +1,48 @@
+{
+    "folders": {
+        "raw_data": "C:\\Users\\eduar\\Projects\\Python\\quant_project\\data\\raw",
+        "interim_data": "C:\\Users\\eduar\\Projects\\Python\\quant_project\\data\\interim",
+        "reports": "C:\\Users\\eduar\\Projects\\Python\\quant_project\\reports",
+        "backtests": "C:\\Users\\eduar\\Projects\\Python\\quant_project\\reports\\backtests"
+    },
+    "tickers": [
+        "AAPL",
+        "BAC",
+        "MSFT",
+        "INTC",
+        "WFC",
+        "C",
+        "GC=F",
+        "SI=F",
+        "CL=F",
+        "BTC-USD",
+        "ETH-USD",
+        "XRP-USD",
+        "EURUSD=X",
+        "JPY=X",
+        "GBPUSD=X",
+        "PRLAX",
+        "QASGX",
+        "HISFX",
+        "^TNX",
+        "^IRX",
+        "^TYX",
+        "WMT",
+        "DIS",
+        "ABT",
+        "GOOGL"
+    ],
+    "fred": {
+        "api_key": "3fe2e620a3cf180bc8c1f2777203b20d",
+        "series_id": "CPIAUCSL",
+        "url": "https://api.stlouisfed.org/fred/series/observations"
+    },
+    "enabled_plot_groups": [
+        "price",
+        "volume",
+        "returns",
+        "volatility",
+        "momentum",
+        "trend"
+    ]
+}

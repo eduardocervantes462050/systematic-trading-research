@@ -26,66 +26,25 @@ from backtesting.walkforward import run_walkforward_all_tickers
 from utils.reporting import generate_overall_equity_curve
 from utils.efficient_frontier_utils import compute_and_save_efficient_frontier
 from portfolio.tracker import MultiClientPortfolioTracker
+from utils.helpers import ensure_folder
 
+path = r"C:\Users\eduar\Projects\Python\quant_project\config\project_config.json"
 
-# -------------------------------
-# Configuration
-# -------------------------------
-TICKERS = [
-    "AAPL",
-    "BAC",
-    "MSFT",
-    "INTC",
-    "WFC",
-    "C",
-    "GC=F",
-    "SI=F",
-    "CL=F",
-    "BTC-USD",
-    "ETH-USD",
-    "XRP-USD",
-    "EURUSD=X",
-    "JPY=X",
-    "GBPUSD=X",
-    "PRLAX",
-    "QASGX",
-    "HISFX",
-    "^TNX",
-    "^IRX",
-    "^TYX",
-    "WMT",
-    "DIS",
-    "ABT",
-    "GOOGL",
-]
+with open(path, "r") as f:
+    config = json.load(f)
 
-RAW_DATA_FOLDER = r"C:\Users\eduar\Projects\Python\quant-project\data\raw"
-INTERIM_DATA_FOLDER = r"C:\Users\eduar\Projects\Python\quant-project\data\interim"
-REPORTS_FOLDER = r"C:\Users\eduar\Projects\Python\quant-project\reports"
-BACKTESTS_FOLDER = os.path.join(REPORTS_FOLDER, "backtests")
+# Access folders
+RAW_DATA_FOLDER = config["folders"]["raw_data"]
+INTERIM_DATA_FOLDER = config["folders"]["interim_data"]
+REPORTS_FOLDER = config["folders"]["reports"]
+BACKTESTS_FOLDER = config["folders"]["backtests"]
 
-FRED_API_KEY = (
-    "3fe2e620a3cf180bc8c1f2777203b20d"  # Consider using environment variables
-)
-FRED_SERIES_ID = "CPIAUCSL"
-FRED_URL = "https://api.stlouisfed.org/fred/series/observations"
-
-ENABLED_PLOT_GROUPS = [
-    "price",
-    "volume",
-    "returns",
-    "volatility",
-    "momentum",
-    "trend",
-]  # Groups to visualize
-
-
-# -------------------------------
-# Helper Functions
-# -------------------------------
-def ensure_folder(path: str):
-    """Create folder if it does not exist."""
-    os.makedirs(path, exist_ok=True)
+# Access tickers and other settings
+TICKERS = config["tickers"]
+FRED_API_KEY = config["fred"]["api_key"]
+FRED_SERIES_ID = config["fred"]["series_id"]
+FRED_URL = config["fred"]["url"]
+ENABLED_PLOT_GROUPS = config["enabled_plot_groups"]
 
 
 # -------------------------------
@@ -320,6 +279,25 @@ def main():
                     tracker.get_client(client_name).input_trade(
                         ticker, -shares, current_prices[ticker], "sell"
                     )
+
+    # -------------------------------
+    # Calculate portfolio equity curves
+    # -------------------------------
+    from portfolio.equity_curve import calculate_portfolio_equity_curve
+
+    # Calculate equity curves and metrics
+    for client_name in tracker.get_all_clients():
+        client = tracker.get_client(client_name)
+        client.history_df = calculate_portfolio_equity_curve(client, filtered_data)
+
+        df = client.history_df
+        start_value = df["total_value"].iloc[0]
+        end_value = df["total_value"].iloc[-1]
+        years = (
+            pd.to_datetime(df["Date"].iloc[-1]) - pd.to_datetime(df["Date"].iloc[0])
+        ).days / 365.25
+        cagr = (end_value / start_value) ** (1 / years) - 1
+        print(f"{client_name} CAGR: {cagr:.2%}")
 
     # Save all histories after rebalancing
     tracker.save_all_histories()
