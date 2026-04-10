@@ -158,6 +158,10 @@ class Portfolio(Base):
         "Transaction", back_populates="portfolio", cascade="all, delete-orphan"
     )
 
+    equity_curves = relationship(
+        "PortfolioEquityCurve", back_populates="portfolio", cascade="all, delete-orphan"
+    )
+
     __table_args__ = (
         CheckConstraint(
             "risk_level IN ('low', 'medium', 'high')", name="ck_portfolio_risk_level"
@@ -223,6 +227,7 @@ class PortfolioAsset(Base):
     __table_args__ = (
         UniqueConstraint("portfolio_id", "asset_id", name="unique_portfolio_asset"),
         Index("idx_portfolio_assets_portfolio", "portfolio_id"),
+        Index("idx_portfolio_assets_asset", "asset_id"),
     )
 
     def __repr__(self):
@@ -620,3 +625,119 @@ def build_db(config_path: str = "config/settings.yaml"):
     init_db(engine)
     session_factory = get_session_factory(engine)
     return engine, session_factory
+
+
+# =============================================================================
+# Portfolio Equity Curves
+# =============================================================================
+# =============================================================================
+# Portfolio Equity Curves
+# =============================================================================
+
+
+class PortfolioEquityCurve(Base):
+    __tablename__ = "portfolio_equity_curves"
+
+    curve_id = Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    portfolio_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("portfolios.portfolio_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    date = Column(Date, nullable=False)
+    total_value = Column(Numeric(20, 6), nullable=False)
+
+    created_at = Column(
+        DateTime,
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    portfolio = relationship("Portfolio", back_populates="equity_curves")
+
+    __table_args__ = (
+        Index(
+            "idx_portfolio_equity_curves_portfolio_date",
+            "portfolio_id",
+            "date",
+        ),
+        UniqueConstraint(
+            "portfolio_id",
+            "date",
+            name="uq_portfolio_date",
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            f"<PortfolioEquityCurve("
+            f"portfolio_id={self.portfolio_id!r}, "
+            f"date={self.date!r}, "
+            f"total_value={self.total_value!r})>"
+        )
+
+
+# =============================================================================
+# SAVE EQUITY CURVE (FIXED + SAFE)
+# =============================================================================
+
+
+def save_equity_curve(session: Session, portfolio_id, df: pd.DataFrame):
+    """
+    Save equity curve into DB.
+
+    Expected df columns:
+        - Date
+        - total_value
+    """
+
+    if df is None or df.empty:
+        return 0
+
+    # Load existing dates (prevents duplicates)
+    existing_dates = {
+        r[0]
+        for r in session.query(PortfolioEquityCurve.date)
+        .filter(PortfolioEquityCurve.portfolio_id == portfolio_id)
+        .all()
+    }
+
+    records = []
+    inserted = 0
+
+    for _, row in df.iterrows():
+        dt = pd.to_datetime(row["Date"]).date()
+
+        if dt in existing_dates:
+            continue
+
+        value = row["total_value"]
+        if pd.isna(value):
+            continue
+
+        records.append(
+            PortfolioEquityCurve(
+                portfolio_id=portfolio_id,
+                date=dt,
+                total_value=Decimal(str(value)),
+            )
+        )
+        inserted += 1
+
+    if records:
+        session.bulk_save_objects(records)
+        session.flush()
+
+    logger.info(
+        "Inserted %d equity curve rows for portfolio %s",
+        inserted,
+        portfolio_id,
+    )
+
+    return inserted
