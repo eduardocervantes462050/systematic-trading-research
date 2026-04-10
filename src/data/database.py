@@ -149,6 +149,7 @@ class Portfolio(Base):
     name = Column(String(100), nullable=False)
     risk_level = Column(String(20))
     created_at = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"))
+    start_date = Column(DateTime, nullable=False)
 
     client = relationship("Client", back_populates="portfolios")
     portfolio_assets = relationship(
@@ -370,8 +371,11 @@ def create_portfolio(
     client_id: UUID,
     name: str,
     risk_level: str = "medium",
+    start_date=None,
 ) -> Portfolio:
-    portfolio = Portfolio(client_id=client_id, name=name, risk_level=risk_level)
+    portfolio = Portfolio(
+        client_id=client_id, name=name, risk_level=risk_level, start_date=start_date
+    )
     session.add(portfolio)
     session.flush()
     logger.info("Created portfolio '%s' for client %s", name, client_id)

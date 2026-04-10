@@ -22,17 +22,22 @@ with get_session(SessionFactory) as session:
 
         for portfolio in portfolios:
 
-            # 1. Calculate equity curve from DB
-            df = calculate_portfolio_equity_curve(session, portfolio.portfolio_id)
+            df = calculate_portfolio_equity_curve(
+                session, portfolio.portfolio_id, portfolio.start_date
+            )
+
+            print("\n---")
+            print(client.name, portfolio.name)
             print(df)
 
             if df.empty:
+                print("EMPTY DF")
                 continue
 
-            # 2. Save to DB (persist results)
+            df = df.sort_values("Date")
+
             save_equity_curve(session, portfolio.portfolio_id, df)
 
-            # 3. Compute CAGR
             start_value = df["total_value"].iloc[0]
             end_value = df["total_value"].iloc[-1]
 
@@ -42,8 +47,10 @@ with get_session(SessionFactory) as session:
 
             years = days / 365.25
 
+            if years <= 0 or start_value == 0:
+                print("Skipping CAGR (invalid data)")
+                continue
+
             cagr = (end_value / start_value) ** (1 / years) - 1
 
             print(f"{client.name} - {portfolio.name} CAGR: {cagr:.2%}")
-
-print("All portfolio equity curves saved.")

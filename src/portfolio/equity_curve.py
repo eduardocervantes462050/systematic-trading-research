@@ -1,20 +1,29 @@
 import pandas as pd
-from data.database import PortfolioAsset, AssetPrice
+from data.database import PortfolioAsset, AssetPrice, Portfolio
 
 
-def calculate_portfolio_equity_curve(session, portfolio_id):
-    # 1. Get holdings
+def calculate_portfolio_equity_curve(session, portfolio_id, start_date=None):
+
+    # 1. Get portfolio
+    portfolio = session.query(Portfolio).filter_by(portfolio_id=portfolio_id).first()
+    if not portfolio:
+        return pd.DataFrame()
+
+    # 2. If no start_date passed → fallback to portfolio.start_date
+    if start_date is None:
+        start_date = portfolio.start_date
+
+    # 3. Get holdings
     holdings = session.query(PortfolioAsset).filter_by(portfolio_id=portfolio_id).all()
-
     if not holdings:
         return pd.DataFrame()
 
     asset_ids = [h.asset_id for h in holdings]
 
-    # 2. Get price history
+    # 4. Get price history filtered by start_date
     prices = (
         session.query(AssetPrice)
-        .filter(AssetPrice.asset_id.in_(asset_ids))
+        .filter(AssetPrice.asset_id.in_(asset_ids), AssetPrice.price_date >= start_date)
         .order_by(AssetPrice.price_date)
         .all()
     )
@@ -22,7 +31,7 @@ def calculate_portfolio_equity_curve(session, portfolio_id):
     if not prices:
         return pd.DataFrame()
 
-    # 3. Build DataFrame
+    # 5. Build DataFrame
     df_prices = pd.DataFrame(
         [
             {"date": p.price_date, "asset_id": p.asset_id, "close": float(p.close)}
@@ -32,13 +41,14 @@ def calculate_portfolio_equity_curve(session, portfolio_id):
 
     pivot = df_prices.pivot(index="date", columns="asset_id", values="close")
 
-    # 4. Holdings vector
+    # 6. Holdings vector
     holdings_dict = {h.asset_id: float(h.quantity) for h in holdings}
 
-    # 5. Portfolio value (vectorized)
+    # 7. Portfolio value
     portfolio_values = pivot.mul(pd.Series(holdings_dict)).sum(axis=1)
 
-    # 6. Output
-    return portfolio_values.reset_index().rename(
-        columns={"date": "Date", 0: "total_value"}
-    )
+    # 8. Output
+    result = portfolio_values.reset_index()
+    result.columns = ["Date", "total_value"]
+
+    return result

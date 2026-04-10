@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from data.database import (
     build_db,
     get_session,
@@ -22,8 +24,16 @@ with get_session(SessionFactory) as session:
     # ── PORTFOLIO ────────────────────────────────────
     portfolio_name = input("Portfolio name: ")
     risk = input("Risk level (low / medium / high): ")
+    start_date = input("Start date (YYYY-MM-DD, optional): ")
+    if start_date:
+        start_date = datetime.strptime(start_date, "%Y-%m-%d")
+
     portfolio = create_portfolio(
-        session, client_id=client.client_id, name=portfolio_name, risk_level=risk
+        session,
+        client_id=client.client_id,
+        name=portfolio_name,
+        risk_level=risk,
+        start_date=start_date,
     )
     print(f"✅ Portfolio '{portfolio_name}' added successfully!")
 
