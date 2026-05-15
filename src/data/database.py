@@ -12,6 +12,7 @@ from datetime import date
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
+from sqlalchemy import JSON
 
 import pandas as pd
 import yaml
@@ -745,3 +746,150 @@ def save_equity_curve(session: Session, portfolio_id, df: pd.DataFrame):
     )
 
     return inserted
+
+
+class PortfolioMetrics(Base):
+    __tablename__ = "portfolio_metrics"
+
+    metric_id = Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    portfolio_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("portfolios.portfolio_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    metric_type = Column(String, nullable=False)  # CAGR, VOLATILITY, SHARPE, DRAWDOWN
+
+    value = Column(Numeric(20, 8), nullable=False)
+
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
+
+    extra_data = Column(JSON, nullable=True)
+
+    created_at = Column(
+        DateTime,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    portfolio = relationship("Portfolio")
+
+    __table_args__ = (
+        Index("idx_portfolio_metrics_portfolio", "portfolio_id"),
+        Index("idx_portfolio_metrics_type", "metric_type"),
+        UniqueConstraint(
+            "portfolio_id",
+            "metric_type",
+            "start_date",
+            "end_date",
+            name="uq_portfolio_metric_window",
+        ),
+    )
+
+
+class OptimizedPortfolio(Base):
+    __tablename__ = "optimized_portfolios"
+
+    optimized_portfolio_id = Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    # Link to original client portfolio
+    portfolio_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("portfolios.portfolio_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    name = Column(String(100), nullable=False)
+
+    optimization_method = Column(
+        String(50),
+        nullable=False,
+    )  # e.g. "max_sharpe", "min_variance", "risk_parity"
+
+    target_risk_level = Column(
+        String(20),
+        nullable=True,
+    )  # optional: low / medium / high target
+
+    expected_return = Column(Numeric(10, 6), nullable=True)
+    expected_volatility = Column(Numeric(10, 6), nullable=True)
+    sharpe_ratio = Column(Numeric(10, 6), nullable=True)
+
+    created_at = Column(
+        DateTime,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    # relationships
+    portfolio = relationship("Portfolio")
+    assets = relationship(
+        "OptimizedPortfolioAsset",
+        back_populates="optimized_portfolio",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (Index("idx_optimized_portfolio_portfolio_id", "portfolio_id"),)
+
+    def __repr__(self):
+        return (
+            f"<OptimizedPortfolio("
+            f"name={self.name!r}, "
+            f"method={self.optimization_method!r})>"
+        )
+
+
+class OptimizedPortfolioAsset(Base):
+    __tablename__ = "optimized_portfolio_assets"
+
+    id = Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    optimized_portfolio_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("optimized_portfolios.optimized_portfolio_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    asset_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("assets.asset_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # KEY DIFFERENCE: weights instead of quantities
+    weight = Column(Numeric(8, 6), nullable=False)  # e.g. 0.25 = 25%
+
+    expected_return = Column(Numeric(10, 6), nullable=True)
+    expected_volatility = Column(Numeric(10, 6), nullable=True)
+
+    optimized_portfolio = relationship(
+        "OptimizedPortfolio",
+        back_populates="assets",
+    )
+
+    asset = relationship("Asset")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "optimized_portfolio_id",
+            "asset_id",
+            name="uq_optimized_portfolio_asset",
+        ),
+        Index("idx_opt_portfolio_assets_portfolio", "optimized_portfolio_id"),
+        Index("idx_opt_portfolio_assets_asset", "asset_id"),
+    )
+
+    def __repr__(self):
+        return f"<OptimizedPortfolioAsset(weight={self.weight})>"

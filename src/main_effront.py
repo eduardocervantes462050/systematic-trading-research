@@ -50,8 +50,9 @@ import yaml
 import pickle
 
 from utils.helpers import ensure_folder
-from utils.efficient_frontier_utils import compute_and_save_efficient_frontier
-
+from src.portfolio.weights.efficient_frontier_utils import (
+    compute_and_save_efficient_frontier,
+)
 
 # ---------------------------------------------------------------------------
 # Main

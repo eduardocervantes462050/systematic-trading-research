@@ -1,13 +1,13 @@
 # Quant Project Report
 
 **Author:** Eduardo Cervantes Alarcón  
-**Date:** 2026-02-10
+**Date:** 2026-05-13
 
 ---
 
 ## 1. Executive Summary
 - Strategy: Momentum + Macro-aware
-- Instruments: AAPL, BAC, BTC-USD, CL=F, C, ETH-USD, EURUSD=X, GBPUSD=X, GC=F, HISFX, INTC, JPY=X, MSFT, PRLAX, QASGX, SI=F, WFC, XRP-USD, ^IRX, ^TNX, ^TYX
+- Instruments: AAPL, ABT, BAC, BTC-USD, CL=F, C, DIS, ETH-USD, EURUSD=X, GBPUSD=X, GC=F, GOOGL, HISFX, INTC, JPY=X, MSFT, PRLAX, QASGX, SI=F, WFC, WMT, XRP-USD, ^IRX, ^TNX, ^TYX
 - Time period: 2000-01-01 – 2025-12-31
 - Key metrics:
   - CAGR: 12.5%
@@ -60,6 +60,16 @@
 
 ![AAPL_signals.png](figures/AAPL_signals.png)
 
+## ABT
+
+![ABT.png](figures/ABT.png)
+
+![ABT_returns_hist.png](figures/ABT_returns_hist.png)
+
+![ABT_rolling_stats.png](figures/ABT_rolling_stats.png)
+
+![ABT_signals.png](figures/ABT_signals.png)
+
 ## BAC
 
 ![BAC.png](figures/BAC.png)
@@ -88,6 +98,16 @@
 
 ![C_signals.png](figures/C_signals.png)
 
+## DIS
+
+![DIS.png](figures/DIS.png)
+
+![DIS_returns_hist.png](figures/DIS_returns_hist.png)
+
+![DIS_rolling_stats.png](figures/DIS_rolling_stats.png)
+
+![DIS_signals.png](figures/DIS_signals.png)
+
 ## ETH-USD
 
 ## EURUSD=X
@@ -95,6 +115,16 @@
 ## GBPUSD=X
 
 ## GC=F
+
+## GOOGL
+
+![GOOGL.png](figures/GOOGL.png)
+
+![GOOGL_returns_hist.png](figures/GOOGL_returns_hist.png)
+
+![GOOGL_rolling_stats.png](figures/GOOGL_rolling_stats.png)
+
+![GOOGL_signals.png](figures/GOOGL_signals.png)
 
 ## HISFX
 
@@ -147,6 +177,8 @@
 ![WFC_rolling_stats.png](figures/WFC_rolling_stats.png)
 
 ![WFC_signals.png](figures/WFC_signals.png)
+
+## WMT
 
 ## XRP-USD
 

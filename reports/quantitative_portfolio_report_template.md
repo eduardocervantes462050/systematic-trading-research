@@ -1,7 +1,6 @@
 # Quantitative Portfolio Report
-
 **Date:** {{date}}  
-**Portfolio Evaluated:** Recommended Portfolio  
+**Portfolio Evaluated:** {{portfolio_name}}  
 **Tickers Included:** {{tickers}}
 
 ---
@@ -13,6 +12,7 @@
 | CAGR            | {{cagr}}                       |
 | Sharpe Ratio    | {{sharpe}}                     |
 | Max Drawdown    | {{max_drawdown}}               |
+| Volatility      | {{volatility}}                 |
 | Analysis Period | {{start_date}} to {{end_date}} |
 
 *These metrics summarize the overall performance and risk profile of the recommended portfolio.*
@@ -21,12 +21,7 @@
 
 ## 2️⃣ Portfolio Composition
 
-| Ticker | Weight | Notes        |
-| ------ | ------ | ------------ |
-| AAPL   | 30%    | Example note |
-| MSFT   | 25%    | Example note |
-| TSLA   | 20%    | Example note |
-| BRK.B  | 25%    | Example note |
+{{allocation_table}}
 
 *Weights can be adjusted based on client preferences or risk tolerance.*
 
@@ -35,16 +30,12 @@
 ## 3️⃣ Portfolio Analysis
 
 ### Equity Curve
-
-![Portfolio Equity Curve](figures/portfolio_equity.png)
+![Portfolio Equity Curve](figures/overall_equity_curve.png)
 
 ### Drawdown
+![Portfolio Drawdown](figures/overall_drawdown.png)
 
-![Portfolio Drawdown](figures/portfolio_drawdown.png)
-
-### Allocation
-
-![Portfolio Allocation](figures/portfolio_allocation.png)
+{{portfolio_plots}}
 
 ---
 
@@ -61,7 +52,8 @@
 > Based on the metrics above, we recommend this portfolio for a **moderately aggressive investor**.  
 > - Expected annual return (CAGR): {{cagr}}  
 > - Risk-adjusted return (Sharpe): {{sharpe}}  
-> - Maximum historical loss (Max Drawdown): {{max_drawdown}}
+> - Maximum historical loss (Max Drawdown): {{max_drawdown}}  
+> - Annualized Volatility: {{volatility}}
 
 *Alternative scenarios (e.g., max Sharpe portfolio or min volatility portfolio) can be provided if desired.*
 

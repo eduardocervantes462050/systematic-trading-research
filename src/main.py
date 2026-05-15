@@ -24,7 +24,9 @@ from utils.visualizations import plot_all_tickers
 from backtesting.backtest import backtest_all_tickers
 from backtesting.walkforward import run_walkforward_all_tickers
 from utils.reporting import generate_overall_equity_curve
-from utils.efficient_frontier_utils import compute_and_save_efficient_frontier
+from src.portfolio.weights.efficient_frontier_utils import (
+    compute_and_save_efficient_frontier,
+)
 from portfolio.tracker import MultiClientPortfolioTracker
 from utils.helpers import ensure_folder
 

@@ -1,121 +1,153 @@
 import os
-import glob
-from datetime import datetime
-import subprocess
+import sys
 import json
+from datetime import datetime
+from data.database import build_db, get_session, Portfolio, PortfolioMetrics
+from portfolio.metrics.cagr import calculate_and_store_cagr
+from portfolio.metrics.volatility import calculate_and_store_volatility
+from portfolio.metrics.max_drawdown import calculate_and_store_max_drawdown
+from portfolio.metrics.sharpe import calculate_and_store_sharpe
 
-# -----------------------
-# Paths
-# -----------------------
-interim_dir = "data/interim"  # where *_features.csv are
-figures_dir = "reports/figures"  # where PNGs are
-os.makedirs(figures_dir, exist_ok=True)
+# Base path — always points to project root regardless of where you run from
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-report_template = "C:\\Users\\eduar\\Projects\\Python\\quant_project\\reports\\quantitative_portfolio_report_template.md"
-report_md = "C:\\Users\\eduar\\Projects\\Python\\quant_project\\reports\\quantitative_portfolio_report.md"
-report_pdf = "C:\\Users\\eduar\\Projects\\Python\\quant_project\\reports\\quantitative_portfolio_report.pdf"
-weights_file = (
-    "C:\\Users\\eduar\\Projects\\Python\\quant_project\\reports\\ef_weights.json"
+TEMPLATE_PATH = os.path.join(
+    BASE_DIR, "reports", "quantitative_portfolio_report_template.md"
 )
-# -----------------------
-# STEP 0: Example portfolio weights and metrics
-# -----------------------
-# In practice, these should come from your portfolio calculation
-with open(weights_file, "r", encoding="utf-8") as f:
-    portfolio_weights = json.load(f)
-    print(f"Loaded portfolio weights: {portfolio_weights}")
+FIGURES_DIR = os.path.join(BASE_DIR, "reports", "figures")
+WEIGHTS_FILE = os.path.join(BASE_DIR, "reports", "ef_weights.json")
 
-key_metrics = {
-    "cagr": "12.5%",
-    "sharpe": "1.45",
-    "max_drawdown": "-15%",
-    "start_date": "2000-01-01",
-    "end_date": "2025-12-31",
-    "fred_series": "CPIAUCSL",
-}
 
-# # -----------------------
-# # STEP 1: Build Markdown for portfolio allocation table
-# # -----------------------
-# allocation_md = "| Ticker | Weight |\n|--------|--------|\n"
-# for ticker, weight in portfolio_weights.items():
-#     allocation_md += f"| {ticker} | {weight*100:.1f}% |\n"
+def get_metric(session, portfolio_id, metric_type):
+    record = (
+        session.query(PortfolioMetrics)
+        .filter(
+            PortfolioMetrics.portfolio_id == portfolio_id,
+            PortfolioMetrics.metric_type == metric_type,
+        )
+        .first()
+    )
+    return float(record.value) if record else None
 
-# # -----------------------
-# # STEP 2: Build Markdown for individual ticker plots
-# # -----------------------
-# tickers_files = glob.glob(os.path.join(interim_dir, "*_features.csv"))
-# tickers = [os.path.basename(f).split("_")[0] for f in tickers_files]
 
-# markdown_plots = ""
-# for ticker in tickers:
-#     figures = glob.glob(os.path.join(figures_dir, f"{ticker}*.png"))
-#     if figures:
-#         markdown_plots += f"## {ticker}\n\n"
-#         for fig_path in figures:
-#             fig_name = os.path.basename(fig_path)
-#             markdown_plots += f"![{fig_name}](figures/{fig_name})\n\n"
+def generate_report(portfolio_name):
+    engine, SessionFactory = build_db()
 
-# # -----------------------
-# # STEP 3: Include main portfolio plots
-# # -----------------------
-# # Expected filenames (adjust as needed)
-# main_plots = {
-#     "equity_curve": "portfolio_equity.png",
-#     "drawdown": "portfolio_drawdown.png",
-#     "allocation": "portfolio_allocation.png",
-# }
+    with get_session(SessionFactory) as session:
+        # 1. Get specific portfolio
+        portfolio = session.query(Portfolio).filter_by(name=portfolio_name).first()
+        if not portfolio:
+            print(f"Portfolio '{portfolio_name}' not found in database.")
+            return
 
-# portfolio_plots_md = ""
-# for desc, fname in main_plots.items():
-#     path = os.path.join(figures_dir, fname)
-#     if os.path.exists(path):
-#         portfolio_plots_md += f"### {desc.replace('_',' ').title()}\n"
-#         portfolio_plots_md += f"![{fname}](figures/{fname})\n\n"
+        portfolio_id = portfolio.portfolio_id
+        print(f"Generating report for: {portfolio.name}")
 
-# # -----------------------
-# # STEP 4: Load Markdown template
-# # -----------------------
-# with open(report_template, "r", encoding="utf-8") as f:
-#     template = f.read()
+        # 2. Calculate and store all metrics
+        print("Calculating metrics...")
+        calculate_and_store_cagr(session)
+        calculate_and_store_volatility(session)
+        calculate_and_store_max_drawdown(session)
+        calculate_and_store_sharpe(session)
 
-# # -----------------------
-# # STEP 5: Replace placeholders
-# # -----------------------
-# placeholders = {
-#     "{{date}}": datetime.today().strftime("%Y-%m-%d"),
-#     "{{tickers}}": ", ".join(portfolio_weights.keys()),
-#     "{{start_date}}": key_metrics["start_date"],
-#     "{{end_date}}": key_metrics["end_date"],
-#     "{{cagr}}": key_metrics["cagr"],
-#     "{{sharpe}}": key_metrics["sharpe"],
-#     "{{max_drawdown}}": key_metrics["max_drawdown"],
-#     "{{fred_series}}": key_metrics["fred_series"],
-#     "{{allocation_table}}": allocation_md,
-#     "{{portfolio_plots}}": portfolio_plots_md,
-#     "{{plots_per_ticker}}": markdown_plots,
-# }
+        # 3. Pull metrics from DB
+        cagr = get_metric(session, portfolio_id, "CAGR")
+        sharpe = get_metric(session, portfolio_id, "SHARPE")
+        max_drawdown = get_metric(session, portfolio_id, "MAX_DRAWDOWN")
+        volatility = get_metric(session, portfolio_id, "VOLATILITY")
 
-# for key, val in placeholders.items():
-#     template = template.replace(key, str(val))
+        # 4. Get date range
+        cagr_record = (
+            session.query(PortfolioMetrics)
+            .filter(
+                PortfolioMetrics.portfolio_id == portfolio_id,
+                PortfolioMetrics.metric_type == "CAGR",
+            )
+            .first()
+        )
+        start_date = str(cagr_record.start_date) if cagr_record else "N/A"
+        end_date = str(cagr_record.end_date) if cagr_record else "N/A"
 
-# # -----------------------
-# # STEP 6: Write Markdown report
-# # -----------------------
-# with open(report_md, "w") as f:
-#     f.write(template)
+        # 5. Load portfolio weights
+        with open(WEIGHTS_FILE, "r") as f:
+            portfolio_weights = json.load(f)
 
-# print(f"Markdown report generated: {report_md}")
+        tickers = ", ".join(portfolio_weights.keys())
 
-# # -----------------------
-# # STEP 7: Convert to PDF (if Pandoc installed)
-# # -----------------------
-# try:
-#     subprocess.run(
-#         ["pandoc", report_md, "-o", report_pdf, "--pdf-engine=xelatex"], check=True
-#     )
-#     print(f"PDF report generated: {report_pdf}")
-# except FileNotFoundError:
-#     print("Pandoc not found. Install Pandoc to convert Markdown to PDF.")
-# except subprocess.CalledProcessError:
-#     print("Pandoc failed to generate PDF. Check your Pandoc/LaTeX installation.")
+        # 6. Build allocation table
+        allocation_md = "| Ticker | Weight |\n|--------|--------|\n"
+        for ticker, weight in portfolio_weights.items():
+            allocation_md += f"| {ticker} | {weight * 100:.1f}% |\n"
+
+        # 7. Build plots section per ticker
+        plots_md = ""
+        for ticker in portfolio_weights.keys():
+            plots_md += f"## {ticker}\n\n"
+            for fig in ["signals", "rolling_stats", "returns_hist"]:
+                path = os.path.join(FIGURES_DIR, f"{ticker}_{fig}.png")
+                if os.path.exists(path):
+                    plots_md += f"![{ticker} {fig}](figures/{ticker}_{fig}.png)\n\n"
+
+        # 8. Load template
+        with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
+            template = f.read()
+
+        # 9. Fill placeholders
+        placeholders = {
+            "{{date}}": datetime.today().strftime("%Y-%m-%d"),
+            "{{portfolio_name}}": portfolio_name,
+            "{{tickers}}": tickers,
+            "{{start_date}}": start_date,
+            "{{end_date}}": end_date,
+            "{{cagr}}": f"{cagr:.2%}" if cagr is not None else "N/A",
+            "{{sharpe}}": f"{sharpe:.2f}" if sharpe is not None else "N/A",
+            "{{max_drawdown}}": (
+                f"{max_drawdown:.2%}" if max_drawdown is not None else "N/A"
+            ),
+            "{{volatility}}": f"{volatility:.2%}" if volatility is not None else "N/A",
+            "{{fred_series}}": "CPIAUCSL",
+            "{{allocation_table}}": allocation_md,
+            "{{portfolio_plots}}": "",
+            "{{plots_per_ticker}}": plots_md,
+        }
+
+        for key, val in placeholders.items():
+            template = template.replace(key, str(val))
+
+        # 10. Write report
+        report_md = os.path.join(
+            BASE_DIR, "reports", f"{portfolio_name}_quantitative_portfolio_report.md"
+        )
+        with open(report_md, "w", encoding="utf-8") as f:
+            f.write(template)
+
+        print(f"\nReport generated: {report_md}")
+        print(
+            f"  CAGR:         {cagr:.2%}" if cagr is not None else "  CAGR:         N/A"
+        )
+        print(
+            f"  Sharpe:       {sharpe:.2f}"
+            if sharpe is not None
+            else "  Sharpe:       N/A"
+        )
+        print(
+            f"  Max Drawdown: {max_drawdown:.2%}"
+            if max_drawdown is not None
+            else "  Max Drawdown: N/A"
+        )
+        print(
+            f"  Volatility:   {volatility:.2%}"
+            if volatility is not None
+            else "  Volatility:   N/A"
+        )
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python quantitative_portfolio_report.py <portfolio_name>")
+        print(
+            "Example: python quantitative_portfolio_report.py Global Multi-Asset Growth Portfolio"
+        )
+    else:
+        portfolio_name = " ".join(sys.argv[1:])
+        generate_report(portfolio_name)
