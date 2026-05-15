@@ -1,145 +1,272 @@
+"""
+src/services/optimization_service.py
+
+Portfolio optimization orchestration layer.
+
+Responsibilities
+----------------
+1. Load portfolio assets from DB
+2. Generate portfolio analytics
+    - expected returns
+    - covariance matrix
+3. Execute optimization strategy
+4. Persist optimized portfolio
+5. Persist weights
+"""
+
 import logging
+
 from sqlalchemy.orm import Session
 
-from data.database import (
+from data.models import (
     PortfolioAsset,
     Asset,
-    OptimizedPortfolio,
-    OptimizedPortfolioAsset,
 )
 
-from portfolio.weights.equal_weight import EqualWeight
+from data.repositories import (
+    upsert_optimized_portfolio,
+    save_weights,
+)
+
+from portfolio.weights.base import (
+    BaseWeightGenerator,
+)
+
+from services.analytics_service import (
+    generate_portfolio_analytics,
+)
 
 logger = logging.getLogger(__name__)
 
 
-# =========================================================
-# 1. DATA LOADING
-# =========================================================
+# =============================================================================
+# PORTFOLIO ASSET LOADING
+# =============================================================================
 
+def load_portfolio_assets(
+    session: Session,
+    portfolio_id: str,
+) -> list[str]:
+    """
+    Load asset symbols belonging to a portfolio.
 
-def load_portfolio_assets(session: Session, portfolio_id: str):
+    Parameters
+    ----------
+    session : Session
+        SQLAlchemy DB session
+
+    portfolio_id : str
+        Portfolio UUID
+
+    Returns
+    -------
+    list[str]
+        Example:
+            ["AAPL", "MSFT", "TLT"]
     """
-    Fetch asset symbols from a real portfolio in DB.
-    """
+
     rows = (
         session.query(PortfolioAsset, Asset)
-        .join(Asset, PortfolioAsset.asset_id == Asset.asset_id)
-        .filter(PortfolioAsset.portfolio_id == portfolio_id)
+        .join(
+            Asset,
+            PortfolioAsset.asset_id == Asset.asset_id,
+        )
+        .filter(
+            PortfolioAsset.portfolio_id == portfolio_id
+        )
         .all()
     )
 
-    assets = [asset.symbol for _, asset in rows]
+    assets = [
+        asset.symbol
+        for _, asset in rows
+    ]
 
     if not assets:
-        logger.warning("No assets found for portfolio %s", portfolio_id)
+        logger.warning(
+            "No assets found for portfolio %s",
+            portfolio_id,
+        )
 
     return assets
 
 
-# =========================================================
-# 2. STRATEGY LAYER
-# =========================================================
+# =============================================================================
+# STRATEGY EXECUTION
+# =============================================================================
 
-
-def generate_equal_weights(assets):
+def generate_weights(
+    strategy: BaseWeightGenerator,
+    assets: list[str],
+    expected_returns,
+    cov_matrix,
+) -> dict[str, float]:
     """
-    Calls EqualWeight strategy.
-    (Pure math layer — no DB here)
+    Execute optimization strategy.
+
+    Parameters
+    ----------
+    strategy : BaseWeightGenerator
+        Portfolio weighting strategy
+
+    assets : list[str]
+        Portfolio assets
+
+    expected_returns :
+        Expected returns vector (mu)
+
+    cov_matrix :
+        Covariance matrix (Sigma)
+
+    Returns
+    -------
+    dict[str, float]
+        Portfolio weights
     """
-    strategy = EqualWeight()
 
-    weights = strategy.generate(returns=None, cov_matrix=None, assets=assets)
-
-    return weights
-
-
-# =========================================================
-# 3. DATABASE: CREATE OPTIMIZED PORTFOLIO
-# =========================================================
-
-
-def create_optimized_portfolio(session: Session, portfolio_id: str, method: str):
-    """
-    Creates a new optimized portfolio record.
-    """
-    opt = OptimizedPortfolio(
-        portfolio_id=portfolio_id,
-        name=f"{method}_portfolio",
-        optimization_method=method,
+    return strategy.generate(
+        returns=expected_returns,
+        cov_matrix=cov_matrix,
+        assets=assets,
     )
 
-    session.add(opt)
-    session.flush()  # get ID before commit
 
-    logger.info("Created optimized portfolio (%s) for %s", method, portfolio_id)
+# =============================================================================
+# MAIN OPTIMIZATION PIPELINE
+# =============================================================================
 
-    return opt
-
-
-# =========================================================
-# 4. DATABASE: SAVE WEIGHTS
-# =========================================================
-
-
-def save_weights(session: Session, optimized_portfolio_id: str, weights: dict):
+def run_optimization(
+    session: Session,
+    portfolio_id: str,
+    strategy: BaseWeightGenerator,
+    method_name: str,
+) -> dict[str, float]:
     """
-    Store weights in DB.
-    Each asset becomes a row.
+    Full optimization pipeline.
+
+    Flow
+    ----
+    portfolio
+        ↓
+    assets
+        ↓
+    analytics
+        ↓
+    strategy
+        ↓
+    weights
+        ↓
+    database persistence
+
+    Parameters
+    ----------
+    session : Session
+        SQLAlchemy session
+
+    portfolio_id : str
+        Portfolio UUID
+
+    strategy : BaseWeightGenerator
+        Optimization strategy
+
+    method_name : str
+        Strategy label persisted in DB
+
+    Returns
+    -------
+    dict[str, float]
+        Optimized weights
     """
-    for symbol, weight in weights.items():
-
-        asset = session.query(Asset).filter_by(symbol=symbol).first()
-
-        if not asset:
-            logger.warning("Asset not found: %s", symbol)
-            continue
-
-        row = OptimizedPortfolioAsset(
-            optimized_portfolio_id=optimized_portfolio_id,
-            asset_id=asset.asset_id,
-            weight=weight,
-        )
-
-        session.add(row)
-
-    session.commit()
 
     logger.info(
-        "Saved %d weights for optimized portfolio %s",
-        len(weights),
-        optimized_portfolio_id,
+        "Starting optimization for portfolio %s",
+        portfolio_id,
     )
 
+    # -------------------------------------------------------------------------
+    # 1. LOAD PORTFOLIO ASSETS
+    # -------------------------------------------------------------------------
 
-# =========================================================
-# 5. MAIN SERVICE (ORCHESTRATION)
-# =========================================================
-
-
-def run_equal_weight_optimization(session: Session, portfolio_id: str):
-    """
-    FULL PIPELINE:
-    DB → assets → strategy → optimized portfolio → DB
-    """
-
-    # 1. Load portfolio assets
-    assets = load_portfolio_assets(session, portfolio_id)
+    assets = load_portfolio_assets(
+        session=session,
+        portfolio_id=portfolio_id,
+    )
 
     if not assets:
-        raise ValueError(f"No assets found for portfolio {portfolio_id}")
+        raise ValueError(
+            f"No assets found for portfolio {portfolio_id}"
+        )
 
-    # 2. Generate weights
-    weights = generate_equal_weights(assets)
-
-    # 3. Create optimized portfolio
-    opt_portfolio = create_optimized_portfolio(
-        session, portfolio_id, method="equal_weight"
+    logger.info(
+        "Loaded %s assets",
+        len(assets),
     )
 
-    # 4. Save weights
-    save_weights(session, opt_portfolio.optimized_portfolio_id, weights)
+    # -------------------------------------------------------------------------
+    # 2. GENERATE PORTFOLIO ANALYTICS
+    # -------------------------------------------------------------------------
 
-    logger.info("Equal weight optimization completed for %s", portfolio_id)
+    expected_returns, cov_matrix = (
+        generate_portfolio_analytics(
+            session=session,
+            assets=assets,
+        )
+    )
+
+    logger.info(
+        "Portfolio analytics generated successfully."
+    )
+
+    # -------------------------------------------------------------------------
+    # 3. EXECUTE STRATEGY
+    # -------------------------------------------------------------------------
+
+    weights = generate_weights(
+        strategy=strategy,
+        assets=assets,
+        expected_returns=expected_returns,
+        cov_matrix=cov_matrix,
+    )
+
+    logger.info(
+        "Optimization strategy executed successfully."
+    )
+
+    # -------------------------------------------------------------------------
+    # 4. UPSERT OPTIMIZED PORTFOLIO
+    # -------------------------------------------------------------------------
+
+    optimized_portfolio = (
+        upsert_optimized_portfolio(
+            session=session,
+            portfolio_id=portfolio_id,
+            method=method_name,
+        )
+    )
+
+    logger.info(
+        "Optimized portfolio upserted."
+    )
+
+    # -------------------------------------------------------------------------
+    # 5. SAVE WEIGHTS
+    # -------------------------------------------------------------------------
+
+    save_weights(
+        session=session,
+        optimized_portfolio_id=(
+            optimized_portfolio.optimized_portfolio_id
+        ),
+        weights=weights,
+    )
+
+    logger.info(
+        "Weights persisted successfully."
+    )
+
+    logger.info(
+        "Optimization completed for portfolio %s",
+        portfolio_id,
+    )
 
     return weights

@@ -1,60 +1,35 @@
+"""
+src/portfolio/metrics/volatility.py
+
+Annualized Volatility calculation and persistence.
+"""
+
+import logging
+
 import pandas as pd
-from data.database import Portfolio, PortfolioMetrics
+from sqlalchemy.orm import Session
+
+from data.models import Portfolio
+from data.repositories import save_portfolio_metrics
 from portfolio.equity_curve import calculate_portfolio_equity_curve
 
+logger = logging.getLogger(__name__)
 
-def calculate_and_store_volatility(session):
-    portfolios = session.query(Portfolio).all()
-    results = []
 
-    for portfolio in portfolios:
-        # 1. Build equity curve
-        df = calculate_portfolio_equity_curve(
-            session, portfolio.portfolio_id, portfolio.start_date
-        )
-        if df.empty or len(df) < 2:
-            continue
+def calculate_volatility(df: pd.DataFrame) -> tuple[float, pd.Timestamp, pd.Timestamp] | None:
+    if df.empty or len(df) < 2:
+        return None
 
-        df = df.sort_values("Date")
+    df = df.sort_values("Date").copy()
+    df["daily_return"] = df["total_value"].pct_change()
+    df = df.dropna(subset=["daily_return"])
 
-        # 2. Calculate daily returns
-        df["daily_return"] = df["total_value"].pct_change()
-        df = df.dropna(subset=["daily_return"])
+    if len(df) < 1:
+        return None
 
-        if len(df) < 2:
-            continue
+    start_date = pd.to_datetime(df["Date"].iloc[0])
+    end_date = pd.to_datetime(df["Date"].iloc[-1])
 
-        start_date = pd.to_datetime(df["Date"].iloc[0])
-        end_date = pd.to_datetime(df["Date"].iloc[-1])
+    volatility = float(df["daily_return"].std() * (252 ** 0.5))  # annualized
 
-        # 3. Annualized volatility formula (std of daily returns * sqrt(252))
-        volatility = float(df["daily_return"].std() * (252**0.5))
-
-        # 4. Check if exists
-        existing = (
-            session.query(PortfolioMetrics)
-            .filter(
-                PortfolioMetrics.portfolio_id == portfolio.portfolio_id,
-                PortfolioMetrics.metric_type == "VOLATILITY",
-            )
-            .first()
-        )
-
-        if existing:
-            existing.value = volatility
-            existing.start_date = start_date
-            existing.end_date = end_date
-        else:
-            metric = PortfolioMetrics(
-                portfolio_id=portfolio.portfolio_id,
-                metric_type="VOLATILITY",
-                value=volatility,
-                start_date=start_date,
-                end_date=end_date,
-            )
-            session.add(metric)
-
-        results.append({"portfolio": portfolio.name, "volatility": volatility})
-
-    session.commit()
-    return results
+    return volatility, start_date, end_date

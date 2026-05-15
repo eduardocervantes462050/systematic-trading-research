@@ -1,5 +1,5 @@
 import pandas as pd
-from data.database import PortfolioAsset, AssetPrice, Portfolio
+from data.models import PortfolioAsset, AssetPrice, Portfolio
 
 
 def calculate_portfolio_equity_curve(session, portfolio_id, start_date=None):

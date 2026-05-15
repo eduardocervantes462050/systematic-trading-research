@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+ 
+[project]
+name = "quant_project"
+version = "0.1.0"
+description = "Quantitative portfolio analytics and backtesting"
+requires-python = ">=3.12"
+ 
+[tool.setuptools.packages.find]
+where = ["src"]
+ 
+[tool.setuptools.package-dir]
+"" = "src"
+ 

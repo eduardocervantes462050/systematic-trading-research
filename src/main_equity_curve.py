@@ -1,12 +1,9 @@
 from portfolio.equity_curve import calculate_portfolio_equity_curve
-from data.database import (
-    build_db,
-    get_all_clients,
-    get_portfolios_by_client,
-    save_equity_curve,
-    get_session,
-)
+from data.engine import build_db, get_session
+from data.repositories.client_repo import get_all_clients
+from data.repositories.portfolio_repo import get_portfolios_by_client
 import pandas as pd
+from data.repositories.portfolio_repo import save_equity_curve
 
 
 # ❗ FIX: SessionFactory must come from build_db()

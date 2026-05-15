@@ -1,9 +1,6 @@
-from data.database import (
-    build_db,
-    get_session,
-    get_all_clients,
-    get_portfolios_by_client,
-)
+from data.engine import build_db, get_session
+from data.repositories.client_repo import get_all_clients
+from data.repositories.portfolio_repo import get_portfolios_by_client
 from Graphs.plot_equity_curve import plot_equity_curve
 
 

@@ -1,0 +1,5 @@
+Metadata-Version: 2.4
+Name: quant_project
+Version: 0.1.0
+Summary: Quantitative portfolio analytics and backtesting
+Requires-Python: >=3.12
