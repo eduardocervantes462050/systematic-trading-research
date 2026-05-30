@@ -1,15 +1,11 @@
 from datetime import datetime
 
-from data.database import (
-    build_db,
-    get_session,
-    create_client,
-    create_portfolio,
-    upsert_holding,
-    get_asset_by_symbol,
-    get_portfolios_by_client,
-    get_client_by_email,
-)
+from data.repositories.portfolio_repo import create_portfolio
+
+from data.repositories.client_repo import create_client, get_client_by_email
+from data.repositories.asset_repo import get_asset_by_symbol
+from data.repositories.portfolio_repo import upsert_holding
+from data. engine import build_db, get_session
 
 engine, SessionFactory = build_db()
 
@@ -51,6 +47,7 @@ with get_session(SessionFactory) as session:
                 f"❌ '{symbol}' not found in asset catalog. Run setup_assets.py first."
             )
             continue
+
 
         quantity = float(input(f"Quantity of {symbol}: "))
         avg_price = float(input(f"Average buy price of {symbol}: "))

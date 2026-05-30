@@ -30,7 +30,8 @@
         "WMT",
         "DIS",
         "ABT",
-        "GOOGL"
+        "GOOGL",
+        "MCD"
     ],
     "fred": {
         "api_key": "3fe2e620a3cf180bc8c1f2777203b20d",

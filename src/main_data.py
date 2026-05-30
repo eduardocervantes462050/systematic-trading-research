@@ -2,7 +2,8 @@ from __future__ import annotations
 import json
 import os
 import pandas as pd
-from data.database import build_db, bulk_insert_prices, get_session, upsert_asset
+from data.engine import build_db, get_session
+from data.repositories.asset_repo import upsert_asset, bulk_insert_prices
 from data.features import FeatureEngineer
 from data.fetch_data import DataFetcher
 from utils.helpers import ensure_folder

@@ -1,4 +1,5 @@
-from data.database import build_db, get_session, upsert_asset
+from data.engine import build_db, get_session
+from data.repositories.asset_repo import upsert_asset
 
 engine, SessionFactory = build_db()
 
@@ -26,6 +27,8 @@ ASSETS = [
     ("^TNX", "10-Year Treasury Yield", "bond"),
     ("^TYX", "30-Year Treasury Yield", "bond"),
     ("^IRX", "13-Week Treasury Bill", "bond"),
+    ("MCD", "McDonald's", "stock"),
+
 ]
 
 with get_session(SessionFactory) as session:

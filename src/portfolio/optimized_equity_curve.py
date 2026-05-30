@@ -59,18 +59,26 @@ def calculate_optimized_equity_curve(
 
     price_df = price_df.astype(float)
 
+    print(price_df)
+
     # 3. Filter by start_date
     if start_date is not None:
         price_df = price_df[price_df.index >= pd.Timestamp(start_date)]
 
     if price_df.empty:
         return pd.DataFrame()
+    
+    print(price_df)
 
     # 4. Normalize prices to 1.0 at start, apply weights
     #    Each asset contributes: weight * (price_t / price_0)
     normalized = price_df / price_df.iloc[0]
     weight_series = pd.Series(weights)
     portfolio_values = normalized.mul(weight_series).sum(axis=1) * initial_value
+
+    print(normalized)
+    print(portfolio_values)
+    print(weight_series)
 
     # 5. Output in same format as calculate_portfolio_equity_curve
     result = portfolio_values.reset_index()
