@@ -9,6 +9,9 @@ does its work via the service layer, and prints results.
 from __future__ import annotations
 
 from services import client_service as svc
+from services.report_service import generate_client_portfolio_report
+from data.engine import get_session
+from services.analytics_service import portfolio_analytics
 
 
 # ─────────────────────────────────────────────
@@ -398,3 +401,80 @@ def cmd_position_history(args, SessionFactory) -> None:
     print(f"  {'─'*10} {'─'*12} {'─'*12} {'─'*12}")
     print(f"  {'TOTAL':<10} {'':>12} {'':>12} {total_value:>12.2f}")
     print()
+
+def cmd_report_recommendation(args, SessionFactory):
+    with get_session(SessionFactory) as session:
+        path = generate_client_portfolio_report(
+            session,
+            args.client_id
+        )
+    print(f"Report generated: {path}")
+
+# ─────────────────────────────────────────────
+# Analytics Command
+# ─────────────────────────────────────────────
+
+def cmd_analytics(args, SessionFactory):
+
+    with get_session(SessionFactory) as session:
+
+        # --------------------------------------------------
+        # CASE 1: direct portfolio_id
+        # --------------------------------------------------
+        if args.portfolio_id:
+
+            mu, cov = portfolio_analytics(
+                session,
+                args.portfolio_id,
+            )
+
+            print("\nExpected Returns:")
+            print(mu)
+
+            print("\nCovariance Matrix:")
+            print(cov)
+
+            return
+
+        # --------------------------------------------------
+        # CASE 2: interactive selection
+        # --------------------------------------------------
+        portfolios = svc.list_portfolios(
+            SessionFactory,
+            args.client_id,
+        )
+
+        if not portfolios:
+            print(f"\nNo portfolios found for client {args.client_id}.\n")
+            return
+
+        print("\nAvailable Portfolios:\n")
+
+        for idx, p in enumerate(portfolios, start=1):
+            print(f"{idx}. {p['name']} (risk={p['risk_level']})")
+
+        try:
+            choice = int(input("\nSelect portfolio number: "))
+
+            if choice < 1 or choice > len(portfolios):
+                print("\nInvalid selection.\n")
+                return
+
+        except ValueError:
+            print("\nPlease enter a number.\n")
+            return
+
+        selected = portfolios[choice - 1]
+
+        print(f"\nSelected: {selected['name']}")
+
+        mu, cov = portfolio_analytics(
+            session,
+            selected["portfolio_id"],
+        )
+
+        print("\nExpected Returns:")
+        print(mu)
+
+        print("\nCovariance Matrix:")
+        print(cov)

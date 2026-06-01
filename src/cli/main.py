@@ -140,7 +140,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate buy/sell orders from latest optimized weights in DB",
     )
     rb.add_argument("--portfolio_id", required=True)
+    # ── REPORT ─────────────────────────────────────────────────────────────
+    report_st = sub.add_parser(
+    "report",
+    help="Create reports"
+    )
+    report_sub = report_st.add_subparsers(
+        dest="subcommand",
+        required=True
+    )
 
+    rr = report_sub.add_parser(
+        "recommendation",
+        help="Create portfolio recommendation report"
+    )
+
+    rr.add_argument("--client_id", required=True)
+
+    # ── ANALYSIS ─────────────────────────────────────────────────────────────
+    analytics = sub.add_parser(
+        "analytics",
+        help="Generate portfolio analytics"
+    )
+
+    analytics.add_argument(
+        "--client_id",
+        required=True,
+    )
+
+    analytics.add_argument(
+        "--portfolio_id",
+        required=False,
+    )
     return parser
 
 
@@ -205,6 +236,17 @@ def main():
     # ── REBALANCE ─────────────────────────────────────────────────────────────
     elif args.command == "rebalance":
         cmd.cmd_rebalance(args, SessionFactory)
+
+    # ── REPORT ─────────────────────────────────────────────────────────────
+    elif args.command == "report":  
+        dispatch = {
+            "recommendation": cmd.cmd_report_recommendation,
+        }
+        dispatch[args.subcommand](args, SessionFactory)
+
+    # ── ANALYTICS ─────────────────────────────────────────────────────────────
+    elif args.command == "analytics":
+        cmd.cmd_analytics(args, SessionFactory)
 
 
 if __name__ == "__main__":

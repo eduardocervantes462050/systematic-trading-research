@@ -1,94 +1,33 @@
 """
 src/services/optimization_service.py
 
-Portfolio optimization orchestration layer.
+Portfolio Optimization Service
 
 Responsibilities
 ----------------
-1. Load portfolio assets from DB
-2. Generate portfolio analytics
-    - expected returns
-    - covariance matrix
-3. Execute optimization strategy
-4. Persist optimized portfolio
-5. Persist weights
+1. Load portfolio analytics
+2. Run optimization strategy
+3. Persist optimized portfolio
+4. Persist optimized weights
 """
 
 import logging
 
+import pandas as pd
 from sqlalchemy.orm import Session
-
-from data.models import (
-    PortfolioAsset,
-    Asset,
-)
 
 from data.repositories import (
     upsert_optimized_portfolio,
     save_weights,
 )
 
-from portfolio.weights.base import (
-    BaseWeightGenerator,
-)
+from portfolio.weights.base import BaseWeightGenerator
 
 from services.analytics_service import (
-    generate_portfolio_analytics,
+    portfolio_analytics,
 )
 
 logger = logging.getLogger(__name__)
-
-
-# =============================================================================
-# PORTFOLIO ASSET LOADING
-# =============================================================================
-
-def load_portfolio_assets(
-    session: Session,
-    portfolio_id: str,
-) -> list[str]:
-    """
-    Load asset symbols belonging to a portfolio.
-
-    Parameters
-    ----------
-    session : Session
-        SQLAlchemy DB session
-
-    portfolio_id : str
-        Portfolio UUID
-
-    Returns
-    -------
-    list[str]
-        Example:
-            ["AAPL", "MSFT", "TLT"]
-    """
-
-    rows = (
-        session.query(PortfolioAsset, Asset)
-        .join(
-            Asset,
-            PortfolioAsset.asset_id == Asset.asset_id,
-        )
-        .filter(
-            PortfolioAsset.portfolio_id == portfolio_id
-        )
-        .all()
-    )
-
-    assets = [
-        asset.symbol
-        for _, asset in rows
-    ]
-
-    if not assets:
-        logger.warning(
-            "No assets found for portfolio %s",
-            portfolio_id,
-        )
-
-    return assets
 
 
 # =============================================================================
@@ -96,33 +35,11 @@ def load_portfolio_assets(
 # =============================================================================
 
 def generate_weights(
-    strategy: BaseWeightGenerator,
-    assets: list[str],
+    strategy,
     expected_returns,
     cov_matrix,
-) -> dict[str, float]:
-    """
-    Execute optimization strategy.
-
-    Parameters
-    ----------
-    strategy : BaseWeightGenerator
-        Portfolio weighting strategy
-
-    assets : list[str]
-        Portfolio assets
-
-    expected_returns :
-        Expected returns vector (mu)
-
-    cov_matrix :
-        Covariance matrix (Sigma)
-
-    Returns
-    -------
-    dict[str, float]
-        Portfolio weights
-    """
+):
+    assets = list(expected_returns.index)
 
     return strategy.generate(
         returns=expected_returns,
@@ -148,34 +65,13 @@ def run_optimization(
     ----
     portfolio
         ↓
-    assets
+    analytics (cached or computed)
         ↓
-    analytics
+    optimization strategy
         ↓
-    strategy
-        ↓
-    weights
+    optimized weights
         ↓
     database persistence
-
-    Parameters
-    ----------
-    session : Session
-        SQLAlchemy session
-
-    portfolio_id : str
-        Portfolio UUID
-
-    strategy : BaseWeightGenerator
-        Optimization strategy
-
-    method_name : str
-        Strategy label persisted in DB
-
-    Returns
-    -------
-    dict[str, float]
-        Optimized weights
     """
 
     logger.info(
@@ -184,37 +80,27 @@ def run_optimization(
     )
 
     # -------------------------------------------------------------------------
-    # 1. LOAD PORTFOLIO ASSETS
+    # 1. LOAD ANALYTICS
     # -------------------------------------------------------------------------
 
-    assets = load_portfolio_assets(
+    expected_returns, cov_matrix = portfolio_analytics(
         session=session,
         portfolio_id=portfolio_id,
-    )
-
-    if not assets:
-        raise ValueError(
-            f"No assets found for portfolio {portfolio_id}"
-        )
-
-    logger.info(
-        "Loaded %s assets",
-        len(assets),
+        use_cache=True,
     )
 
     # -------------------------------------------------------------------------
-    # 2. GENERATE PORTFOLIO ANALYTICS
+    # 2. REBUILD PANDAS OBJECTS IF LOADED FROM CACHE
     # -------------------------------------------------------------------------
 
-    expected_returns, cov_matrix = (
-        generate_portfolio_analytics(
-            session=session,
-            assets=assets,
-        )
-    )
+    if isinstance(expected_returns, dict):
+        expected_returns = pd.Series(expected_returns)
+
+    if isinstance(cov_matrix, dict):
+        cov_matrix = pd.DataFrame(cov_matrix)
 
     logger.info(
-        "Portfolio analytics generated successfully."
+        "Portfolio analytics loaded successfully."
     )
 
     # -------------------------------------------------------------------------
@@ -223,7 +109,6 @@ def run_optimization(
 
     weights = generate_weights(
         strategy=strategy,
-        assets=assets,
         expected_returns=expected_returns,
         cov_matrix=cov_matrix,
     )

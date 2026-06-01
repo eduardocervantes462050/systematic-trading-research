@@ -188,4 +188,44 @@ class PortfolioMetrics(Base):
             f"type={self.metric_type!r}, "
             f"value={self.value!r})>"
         )
+
+
+class PortfolioAnalytics(Base):
+    __tablename__ = "portfolio_analytics"
+
+    analytics_id = Column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        server_default=text("gen_random_uuid()"),
+    )
+
+    portfolio_id = Column(
+        PG_UUID(as_uuid=True),
+        ForeignKey("portfolios.portfolio_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    analytics_type = Column(
+        String(50),
+        nullable=False,
+    )
+
+    value = Column(
+        JSON,
+        nullable=False,
+    )
+
+    created_at = Column(
+        DateTime,
+        server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    portfolio = relationship("Portfolio")
+
+    __table_args__ = (
+        Index(
+            "idx_portfolio_analytics_portfolio",
+            "portfolio_id",
+        ),
+    )
     
