@@ -1,103 +1,123 @@
 from pathlib import Path
 from datetime import datetime
 
-from data.models import Portfolio, PortfolioAsset
+from jinja2 import Environment, FileSystemLoader
+
+from data.models import Portfolio, PortfolioAsset,PortfolioMetrics
+
 
 
 # ─────────────────────────────────────────────
-# PATH CONFIG
+# PATHS
 # ─────────────────────────────────────────────
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-TEMPLATE_PATH = BASE_DIR / "reports" / "client_portfolio_template.md"
-OUTPUT_DIR = BASE_DIR / "reports"
+TEMPLATE_DIR = BASE_DIR / "reports" / "templates"
+OUTPUT_DIR = BASE_DIR / "reports" / "outputs"
 
 
 # ─────────────────────────────────────────────
-# MAIN REPORT GENERATOR
+# METRICS FETCH
+# ─────────────────────────────────────────────
+
+def get_latest_metrics(session, portfolio_id: str):
+    rows = (
+        session.query(PortfolioMetrics)
+        .filter(PortfolioMetrics.portfolio_id == portfolio_id)
+        .all()
+    )
+
+    if not rows:
+        return {}
+
+    metrics = {}
+
+    for r in rows:
+        if not r.metric_type:
+            continue
+
+        metrics[r.metric_type] = r.value
+
+    return metrics
+
+
+# ─────────────────────────────────────────────
+# MAIN REPORT
 # ─────────────────────────────────────────────
 
 def generate_client_portfolio_report(session, client_id: str) -> str:
-    """
-    Generates a markdown report showing:
-    - Client portfolios
-    - Portfolio holdings (PortfolioAsset → Asset)
-    """
 
-    # ─────────────────────────────────────────
-    # 1. Load portfolios
-    # ─────────────────────────────────────────
     portfolios = (
         session.query(Portfolio)
         .filter(Portfolio.client_id == client_id)
         .all()
     )
 
-    # ─────────────────────────────────────────
-    # 2. Build holdings section
-    # ─────────────────────────────────────────
-    report_body = ""
+    # ─────────────────────────────
+    # BUILD STRUCTURED DATA
+    # ─────────────────────────────
 
-    if not portfolios:
-        report_body = "No portfolios found for this client."
-    else:
-        for portfolio in portfolios:
-            report_body += f"\n## {portfolio.name}\n\n"
-            report_body += "| Symbol | Quantity | Avg Price |\n"
-            report_body += "|--------|----------|-----------|\n"
+    portfolio_data = []
 
-            holdings = (
-                session.query(PortfolioAsset)
-                .filter(PortfolioAsset.portfolio_id == portfolio.portfolio_id)
-                .all()
-            )
+    for p in portfolios:
 
-            if not holdings:
-                report_body += "| - | - | - |\n\n"
-                continue
+        holdings = (
+            session.query(PortfolioAsset)
+            .filter(PortfolioAsset.portfolio_id == p.portfolio_id)
+            .all()
+        )
 
-            for h in holdings:
+        holdings_list = []
 
-                # ── SAFE SYMBOL RESOLUTION ──
-                symbol = None
-                if h.asset:
-                    symbol = getattr(h.asset, "symbol", None) or getattr(h.asset, "ticker", None)
+        for h in holdings:
+            symbol = None
+            if h.asset:
+                symbol = getattr(h.asset, "symbol", None) or getattr(h.asset, "ticker", None)
 
-                symbol = symbol or str(h.asset_id)
+            holdings_list.append({
+                "symbol": symbol or str(h.asset_id),
+                "quantity": float(h.quantity),
+                "avg_price": float(h.avg_price or 0),
+            })
 
-                report_body += (
-                    f"| {symbol} | "
-                    f"{float(h.quantity):.4f} | "
-                    f"{float(h.avg_price) if h.avg_price else 0:.2f} |\n"
-                )
+        portfolio_data.append({
+            "name": p.name,
+            "holdings": holdings_list,
+            "metrics": get_latest_metrics(session, p.portfolio_id),
+        })
 
-            report_body += "\n"
+    # ─────────────────────────────
+    # JINJA ENV
+    # ─────────────────────────────
 
-    # ─────────────────────────────────────────
-    # 3. Load template
-    # ─────────────────────────────────────────
-    with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
-        template = f.read()
+    env = Environment(
+        loader=FileSystemLoader(TEMPLATE_DIR),
+        autoescape=False,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
 
-    # ─────────────────────────────────────────
-    # 4. Fill placeholders
-    # ─────────────────────────────────────────
-    placeholders = {
-        "{{date}}": datetime.today().strftime("%Y-%m-%d"),
-        "{{client_id}}": client_id,
-        "{{portfolio_table}}": report_body,
-        "{{portfolio_count}}": str(len(portfolios)),
-    }
+    template = env.get_template("client_portfolio_template.md")
 
-    for key, value in placeholders.items():
-        template = template.replace(key, str(value))
+    # ─────────────────────────────
+    # RENDER
+    # ─────────────────────────────
 
-    # ─────────────────────────────────────────
-    # 5. Save output file
-    # ─────────────────────────────────────────
+    rendered = template.render(
+        client_id=client_id,
+        date=datetime.today().strftime("%Y-%m-%d"),
+        portfolios=portfolio_data,
+    )
+
+    # ─────────────────────────────
+    # SAVE
+    # ─────────────────────────────
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
     output_path = OUTPUT_DIR / f"client_{client_id}_portfolio_report.md"
 
     with open(output_path, "w", encoding="utf-8") as f:
-        f.write(template)
+        f.write(rendered)
 
     return str(output_path)

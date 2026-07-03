@@ -12,7 +12,7 @@ from services import client_service as svc
 from services.report_service import generate_client_portfolio_report
 from data.engine import get_session
 from services.analytics_service import portfolio_analytics
-
+from services.metrics_service import refresh_all_metrics
 
 # ─────────────────────────────────────────────
 # HELPERS
@@ -478,3 +478,37 @@ def cmd_analytics(args, SessionFactory):
 
         print("\nCovariance Matrix:")
         print(cov)
+
+
+
+# ─────────────────────────────────────────────
+# Metrics Command
+# ─────────────────────────────────────────────
+
+def cmd_metrics(args, SessionFactory):
+    with get_session(SessionFactory) as session:
+        results = refresh_all_metrics(session)
+
+    for r in results["cagr"]:
+        print(f"{r['portfolio']} → CAGR: {r['cagr']:.2%}")
+
+    for r in results["volatility"]:
+        print(f"{r['portfolio']} → Volatility: {r['volatility']:.2%}")
+
+    for r in results["max_drawdown"]:
+        print(f"{r['portfolio']} → Max Drawdown: {r['max_drawdown']:.2%}")
+
+    for r in results["sharpe"]:
+        print(f"{r['portfolio']} → Sharpe: {r['sharpe']:.2f}")
+
+    for r in results["hhi"]:
+        print(f"{r['portfolio']} → HHI: {r['hhi']:.4f}")
+    
+    for r in results["top5_concentration"]:
+        print(f"{r['portfolio']} → Top 5 Concentration: {r['top5_concentration']:.2%}")
+    
+    for r in results["enh"]:
+        print(f"{r['portfolio']} → ENH: {r['enh']:.4f}")
+
+    for r in results["big_single_position"]:
+        print(f"{r['portfolio']} → Big Single Position: {r['big_single_position']:.2%}")

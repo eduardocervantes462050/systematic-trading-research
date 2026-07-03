@@ -73,8 +73,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     cc = client_sub.add_parser("correct", help="Correct a client field")
     cc.add_argument("--client_id", required=True)
-    cc.add_argument("--field", required=True, choices=["name", "email", "phone"],
-                    help="Field to update")
+    cc.add_argument(
+        "--field",
+        required=True,
+        choices=["name", "email", "phone"],
+        help="Field to update",
+    )
     cc.add_argument("--value", required=True)
 
     cd = client_sub.add_parser("delete", help="Delete a client (cascades)")
@@ -117,8 +121,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     posh = pos_sub.add_parser("history", help="Reconstruct positions as of a date/time")
     posh.add_argument("--portfolio_id", required=True)
-    posh.add_argument("--datetime", required=True, dest="date",
-                      help="YYYY-MM-DD  or  'YYYY-MM-DD HH:MM:SS'")
+    posh.add_argument(
+        "--datetime",
+        required=True,
+        dest="date",
+        help="YYYY-MM-DD  or  'YYYY-MM-DD HH:MM:SS'",
+    )
 
     # ── TRANSACTION ───────────────────────────────────────────────────────────
     tx_p = sub.add_parser("transaction", help="Manage transactions")
@@ -141,27 +149,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rb.add_argument("--portfolio_id", required=True)
     # ── REPORT ─────────────────────────────────────────────────────────────
-    report_st = sub.add_parser(
-    "report",
-    help="Create reports"
-    )
-    report_sub = report_st.add_subparsers(
-        dest="subcommand",
-        required=True
-    )
+    report_st = sub.add_parser("report", help="Create reports")
+    report_sub = report_st.add_subparsers(dest="subcommand", required=True)
 
     rr = report_sub.add_parser(
-        "recommendation",
-        help="Create portfolio recommendation report"
+        "recommendation", help="Create portfolio recommendation report"
     )
 
     rr.add_argument("--client_id", required=True)
 
     # ── ANALYSIS ─────────────────────────────────────────────────────────────
-    analytics = sub.add_parser(
-        "analytics",
-        help="Generate portfolio analytics"
-    )
+    analytics = sub.add_parser("analytics", help="Generate portfolio analytics")
 
     analytics.add_argument(
         "--client_id",
@@ -169,6 +167,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     analytics.add_argument(
+        "--portfolio_id",
+        required=False,
+    )
+
+    # ── METRICS ─────────────────────────────────────────────────────────────
+    metrics = sub.add_parser("metrics", help="Generate portfolio metrics")
+
+    metrics.add_argument(
+        "--client_id",
+        required=True,
+    )
+
+    metrics.add_argument(
         "--portfolio_id",
         required=False,
     )
@@ -198,19 +209,19 @@ def main():
     # ── CLIENT ────────────────────────────────────────────────────────────────
     elif args.command == "client":
         dispatch = {
-            "list":    cmd.cmd_client_list,
-            "show":    cmd.cmd_client_show,
-            "add":     cmd.cmd_client_add,
+            "list": cmd.cmd_client_list,
+            "show": cmd.cmd_client_show,
+            "add": cmd.cmd_client_add,
             "correct": cmd.cmd_client_correct,
-            "delete":  cmd.cmd_client_delete,
+            "delete": cmd.cmd_client_delete,
         }
         dispatch[args.subcommand](args, SessionFactory)
 
     # ── PORTFOLIO ─────────────────────────────────────────────────────────────
     elif args.command == "portfolio":
         dispatch = {
-            "list":   cmd.cmd_portfolio_list,
-            "add":    cmd.cmd_portfolio_add,
+            "list": cmd.cmd_portfolio_list,
+            "add": cmd.cmd_portfolio_add,
             "update": cmd.cmd_portfolio_update,
         }
         dispatch[args.subcommand](args, SessionFactory)
@@ -218,9 +229,9 @@ def main():
     # ── POSITION ──────────────────────────────────────────────────────────────
     elif args.command == "position":
         dispatch = {
-            "list":    cmd.cmd_position_list,
-            "set":     cmd.cmd_position_set,
-            "delete":  cmd.cmd_position_delete,
+            "list": cmd.cmd_position_list,
+            "set": cmd.cmd_position_set,
+            "delete": cmd.cmd_position_delete,
             "history": cmd.cmd_position_history,
         }
         dispatch[args.subcommand](args, SessionFactory)
@@ -229,7 +240,7 @@ def main():
     elif args.command == "transaction":
         dispatch = {
             "list": cmd.cmd_transaction_list,
-            "add":  cmd.cmd_transaction_add,
+            "add": cmd.cmd_transaction_add,
         }
         dispatch[args.subcommand](args, SessionFactory)
 
@@ -238,7 +249,7 @@ def main():
         cmd.cmd_rebalance(args, SessionFactory)
 
     # ── REPORT ─────────────────────────────────────────────────────────────
-    elif args.command == "report":  
+    elif args.command == "report":
         dispatch = {
             "recommendation": cmd.cmd_report_recommendation,
         }
@@ -247,6 +258,11 @@ def main():
     # ── ANALYTICS ─────────────────────────────────────────────────────────────
     elif args.command == "analytics":
         cmd.cmd_analytics(args, SessionFactory)
+
+    # ── METRICS ─────────────────────────────────────────────────────────────
+    elif args.command == "metrics":
+        cmd.cmd_metrics(args, SessionFactory)
+
 
 
 if __name__ == "__main__":
